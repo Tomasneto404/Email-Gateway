@@ -1,0 +1,51 @@
+import { Inject, Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { Worker } from 'bullmq';
+import { APP_CONFIG, AppConfig } from '../config/config';
+import { EventLogger } from '../common/event-logger';
+import { PrismaService } from '../common/prisma.service';
+import { MAINTENANCE_QUEUE, QUEUE_PREFIX, QueueService, redisConnection } from '../queue/queue.service';
+
+/** Daily audit-log retention: purge bodies after N days, delete rows after M days. */
+@Injectable()
+export class RetentionService implements OnApplicationBootstrap, OnApplicationShutdown {
+  private worker?: Worker;
+
+  constructor(
+    @Inject(APP_CONFIG) private readonly cfg: AppConfig,
+    private readonly prisma: PrismaService,
+    private readonly queues: QueueService,
+    private readonly events: EventLogger,
+  ) {}
+
+  async onApplicationBootstrap() {
+    await this.queues.maintenance.upsertJobScheduler('retention', { pattern: this.cfg.RETENTION_CRON, tz: 'UTC' }, { name: 'retention' });
+    this.worker = new Worker(MAINTENANCE_QUEUE, async (job) => (job.name === 'retention' ? this.run() : undefined), {
+      connection: redisConnection(this.cfg.REDIS_URL),
+      prefix: QUEUE_PREFIX,
+      concurrency: 1,
+    });
+  }
+
+  async onApplicationShutdown() {
+    await this.worker?.close();
+  }
+
+  async run(now = new Date()) {
+    const bodyCutoff = new Date(now.getTime() - this.cfg.AUDIT_BODY_RETENTION_DAYS * 86_400_000);
+    const recordCutoff = new Date(now.getTime() - this.cfg.AUDIT_RECORD_RETENTION_DAYS * 86_400_000);
+
+    const purgedBodies = await this.prisma.$executeRaw`
+      UPDATE messages SET text_body = NULL, html_body = NULL, body_purged_at = ${now}
+      WHERE created_at < ${bodyCutoff} AND body_purged_at IS NULL`;
+    const purgedAttachments = await this.prisma.$executeRaw`
+      UPDATE message_attachments a SET content = NULL
+      FROM messages m WHERE a.message_id = m.id AND m.created_at < ${bodyCutoff} AND a.content IS NOT NULL`;
+    const deleted = await this.prisma.message.deleteMany({ where: { createdAt: { lt: recordCutoff } } });
+    const deletedStats = await this.prisma.messageStatsHourly.deleteMany({ where: { bucket: { lt: recordCutoff } } });
+    const deletedAudit = await this.prisma.adminAudit.deleteMany({ where: { at: { lt: recordCutoff } } });
+
+    const result = { purgedBodies, purgedAttachments, deletedMessages: deleted.count, deletedStats: deletedStats.count, deletedAdminAudit: deletedAudit.count };
+    this.events.emit('retention_completed', { outcome: 'success', ...result });
+    return result;
+  }
+}

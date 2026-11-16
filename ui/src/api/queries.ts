@@ -1,0 +1,156 @@
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { api, call, errorMessage, setCsrfToken, type Schemas } from './client';
+
+export type Key = Schemas['KeyWithUsageDto'];
+export type KeyPolicy = Schemas['KeyDto'];
+export type Message = Schemas['MessageListItemDto'];
+export type MessageDetail = Schemas['MessageDetailDto'];
+export type User = Schemas['UserDto'];
+export type Session = Schemas['SessionDto'];
+export type UpdateKey = Schemas['UpdateKeyDto'];
+
+// ---------------------------------------------------------------- session
+export const sessionQuery = {
+  queryKey: ['session'] as QueryKey,
+  queryFn: async (): Promise<Session> => {
+    const s = await call(api.GET('/admin/auth/session'));
+    setCsrfToken(s.csrfToken);
+    return s;
+  },
+  staleTime: 60_000,
+  retry: false,
+};
+export const useSession = () => useQuery(sessionQuery);
+export const useAuthConfig = () => useQuery({ queryKey: ['auth-config'], queryFn: () => call(api.GET('/admin/auth/config')), staleTime: Infinity });
+
+/** Mutation helper: toast on error, invalidate keys on success. */
+function useAction<TVars, TData>(fn: (v: TVars) => Promise<TData>, opts: { invalidate?: QueryKey[]; success?: string | ((d: TData) => string) } = {}) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (d) => {
+      for (const k of opts.invalidate ?? []) qc.invalidateQueries({ queryKey: k });
+      const msg = typeof opts.success === 'function' ? opts.success(d) : opts.success;
+      if (msg) toast.success(msg);
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+}
+
+// ---------------------------------------------------------------- dashboard
+export const useSystemState = () =>
+  useQuery({ queryKey: ['system'], queryFn: () => call(api.GET('/admin/stats/system')), refetchInterval: 10_000 });
+
+export const useStats = (q: { from?: string; to?: string; bucket?: 'hour' | 'day'; keyId?: string }) =>
+  useQuery({
+    queryKey: ['stats', q],
+    queryFn: () => call(api.GET('/admin/stats/overview', { params: { query: q } })),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
+  });
+
+export const usePauseGateway = () =>
+  useAction((reason: string) => call(api.POST('/admin/gateway/pause', { body: { reason } })), { invalidate: [['system']], success: 'Gateway paused' });
+export const useResumeGateway = () =>
+  useAction(() => call(api.POST('/admin/gateway/resume')), { invalidate: [['system']], success: 'Gateway resumed' });
+
+// ---------------------------------------------------------------- keys
+export interface KeyListParams {
+  q?: string;
+  mode?: 'sandbox' | 'live' | 'approval';
+  enabled?: boolean;
+  page?: number;
+  pageSize?: number;
+  sort?: 'name' | 'createdAt' | 'lastUsedAt';
+  order?: 'asc' | 'desc';
+}
+export const useKeys = (q: KeyListParams) =>
+  useQuery({ queryKey: ['keys', q], queryFn: () => call(api.GET('/admin/keys', { params: { query: q } })), placeholderData: keepPreviousData });
+export const useKey = (id: string) => useQuery({ queryKey: ['keys', id], queryFn: () => call(api.GET('/admin/keys/{id}', { params: { path: { id } } })) });
+
+export const useCreateKey = () =>
+  useAction((body: Schemas['CreateKeyDto']) => call(api.POST('/admin/keys', { body })), { invalidate: [['keys']] });
+export const useUpdateKey = (id: string) =>
+  useAction((body: UpdateKey) => call(api.PATCH('/admin/keys/{id}', { params: { path: { id } }, body })), { invalidate: [['keys']], success: 'Policy saved' });
+export const useRotateKey = (id: string) =>
+  useAction(() => call(api.POST('/admin/keys/{id}/rotate', { params: { path: { id } } })), { invalidate: [['keys']] });
+export const useSetKeyEnabled = (id: string) =>
+  useAction(
+    (enabled: boolean) =>
+      enabled ? call(api.POST('/admin/keys/{id}/enable', { params: { path: { id } } })) : call(api.POST('/admin/keys/{id}/disable', { params: { path: { id } } })),
+    { invalidate: [['keys']], success: (k) => (k.enabled ? 'Key enabled' : 'Key disabled') },
+  );
+export const useDeleteKey = (id: string) =>
+  useAction(() => call(api.DELETE('/admin/keys/{id}', { params: { path: { id } } })), { invalidate: [['keys']], success: 'Key deleted' });
+export const useTestSend = (id: string) =>
+  useAction((body: Schemas['TestSendDto']) => call(api.POST('/admin/keys/{id}/test-send', { params: { path: { id } }, body })), {
+    invalidate: [['messages'], ['keys']],
+  });
+
+// ---------------------------------------------------------------- messages
+export interface MessageListParams {
+  status?: string;
+  keyId?: string;
+  recipient?: string;
+  subject?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+  sort?: 'createdAt' | 'status' | 'subject';
+  order?: 'asc' | 'desc';
+}
+export const useMessages = (q: MessageListParams, opts: { refetchInterval?: number } = {}) =>
+  useQuery({
+    queryKey: ['messages', q],
+    queryFn: () => call(api.GET('/admin/messages', { params: { query: q } })),
+    placeholderData: keepPreviousData,
+    ...opts,
+  });
+export const useMessage = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['messages', 'detail', id],
+    queryFn: () => call(api.GET('/admin/messages/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    refetchInterval: (q) => (q.state.data && ['queued', 'pending_approval'].includes(q.state.data.status) ? 2000 : false),
+  });
+export const useApprove = () =>
+  useAction((ids: string[]) => call(api.POST('/admin/messages/approve', { body: { ids } })), {
+    invalidate: [['messages'], ['system']],
+    success: (r) => `${r.results.filter((x) => x.ok).length} approved`,
+  });
+export const useReject = () =>
+  useAction((v: { ids: string[]; reason?: string }) => call(api.POST('/admin/messages/reject', { body: v })), {
+    invalidate: [['messages'], ['system']],
+    success: (r) => `${r.results.filter((x) => x.ok).length} rejected`,
+  });
+
+// ---------------------------------------------------------------- users / audit / settings
+export const useUsers = () => useQuery({ queryKey: ['users'], queryFn: () => call(api.GET('/admin/users')) });
+export const useInviteUser = () => useAction((body: Schemas['InviteUserDto']) => call(api.POST('/admin/users', { body })), { invalidate: [['users']] });
+export const useUpdateUser = () =>
+  useAction((v: { id: string; body: Schemas['UpdateUserDto'] }) => call(api.PATCH('/admin/users/{id}', { params: { path: { id: v.id } }, body: v.body })), {
+    invalidate: [['users']],
+    success: 'User updated',
+  });
+export const useResetTotp = () =>
+  useAction((id: string) => call(api.POST('/admin/users/{id}/reset-2fa', { params: { path: { id } } })), { invalidate: [['users']], success: '2FA reset' });
+export const useResetAccess = () => useAction((id: string) => call(api.POST('/admin/users/{id}/reset-access', { params: { path: { id } } })), { invalidate: [['users']] });
+export const useDeleteUser = () =>
+  useAction((id: string) => call(api.DELETE('/admin/users/{id}', { params: { path: { id } } })), { invalidate: [['users']], success: 'User deleted' });
+
+export interface AuditParams {
+  action?: string;
+  actor?: string;
+  actorType?: 'user' | 'token' | 'cli' | 'system';
+  outcome?: 'success' | 'failure';
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+  order?: 'asc' | 'desc';
+}
+export const useAudit = (q: AuditParams) =>
+  useQuery({ queryKey: ['audit', q], queryFn: () => call(api.GET('/admin/audit', { params: { query: q } })), placeholderData: keepPreviousData });
+export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => call(api.GET('/admin/settings')), staleTime: 300_000 });

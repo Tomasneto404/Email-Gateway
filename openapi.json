@@ -1,0 +1,4092 @@
+{
+  "components": {
+    "schemas": {
+      "AttachmentDto": {
+        "properties": {
+          "content": {
+            "description": "File content, base64-encoded. Decoded size counts toward maxAttachmentBytes and maxMessageBytes.",
+            "type": "string"
+          },
+          "contentType": {
+            "description": "MIME type. Defaults to application/octet-stream.",
+            "example": "application/pdf",
+            "type": "string"
+          },
+          "filename": {
+            "description": "File name shown to the recipient. No line breaks or path separators.",
+            "example": "report.pdf",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "content"
+        ],
+        "type": "object"
+      },
+      "AttachmentMetaDto": {
+        "properties": {
+          "contentType": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "contentType",
+          "sizeBytes"
+        ],
+        "type": "object"
+      },
+      "AuditEntryDto": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actorId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "actorLabel": {
+            "type": "string"
+          },
+          "actorType": {
+            "enum": [
+              "user",
+              "token",
+              "cli",
+              "system"
+            ],
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "nullable": true,
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ip": {
+            "nullable": true,
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "success",
+              "failure"
+            ],
+            "type": "string"
+          },
+          "targetId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "targetType": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "actorType",
+          "actorId",
+          "actorLabel",
+          "action",
+          "targetType",
+          "targetId",
+          "details",
+          "ip",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "AuditListDto": {
+        "properties": {
+          "actions": {
+            "description": "Distinct action names (for filters)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntryDto"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "actions"
+        ],
+        "type": "object"
+      },
+      "AuthConfigDto": {
+        "properties": {
+          "authentik": {
+            "type": "boolean"
+          },
+          "localLogin": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "localLogin",
+          "authentik"
+        ],
+        "type": "object"
+      },
+      "AuthentikSettingsDto": {
+        "properties": {
+          "adminGroup": {
+            "type": "string"
+          },
+          "bodiesGroup": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "nullable": true,
+            "type": "string"
+          },
+          "scopes": {
+            "type": "string"
+          },
+          "viewerGroup": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "issuer",
+          "adminGroup",
+          "viewerGroup",
+          "bodiesGroup",
+          "scopes"
+        ],
+        "type": "object"
+      },
+      "BreakerDto": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "provider": {
+            "enum": [
+              "smtp",
+              "resend"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "enabled",
+          "state"
+        ],
+        "type": "object"
+      },
+      "BulkBody": {
+        "properties": {
+          "ids": {
+            "description": "Message ids (max 500).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "description": "Reject reason (reject only).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "type": "object"
+      },
+      "BulkItemDto": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "ok"
+        ],
+        "type": "object"
+      },
+      "BulkResultDto": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/BulkItemDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
+      "CheckDto": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "latencyMs": {
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "up",
+              "down",
+              "skipped"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "CodeBody": {
+        "properties": {
+          "code": {
+            "description": "6-digit code from the authenticator app",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "CreateKeyDto": {
+        "properties": {
+          "allowReplyTo": {
+            "type": "boolean"
+          },
+          "allowedRecipients": {
+            "description": "Exact addresses (\"ops@example.com\") and/or domains (\"@example.com\"). Empty = reject everything.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "attachmentsAllowed": {
+            "type": "boolean"
+          },
+          "description": {
+            "description": "Free text description of what this key is for.",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "fromAddress": {
+            "description": "Fixed sender address (required on create). Clients cannot override it.",
+            "type": "string"
+          },
+          "fromName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "liveProvider": {
+            "description": "Live provider override; null = gateway default (LIVE_PROVIDER).",
+            "enum": [
+              "smtp",
+              "resend"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "maxAttachmentBytes": {
+            "type": "number"
+          },
+          "maxMessageBytes": {
+            "type": "number"
+          },
+          "maxRecipientsPerMessage": {
+            "type": "number"
+          },
+          "mode": {
+            "description": "sandbox: delivered to Mailpit only. live: delivered for real. approval: held until an admin approves, then delivered live.",
+            "enum": [
+              "sandbox",
+              "live",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "Unique key name (letters, digits, dot, dash, underscore). Added as X-Mail-Gateway-Key header.",
+            "type": "string"
+          },
+          "quotaPerDay": {
+            "type": "number"
+          },
+          "quotaPerHour": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ErrorBodyDto": {
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable code, e.g. RECIPIENT_NOT_ALLOWED, QUOTA_EXCEEDED, DUPLICATE_MESSAGE, KEY_DISABLED, GATEWAY_PAUSED.",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "description": "Extra data, e.g. notAllowed addresses or retryAfterSeconds.",
+            "type": "object"
+          },
+          "message": {
+            "description": "Human/LLM-readable explanation of what is wrong and what to change.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ErrorResponseDto": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBodyDto"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "GatewayStateDto": {
+        "properties": {
+          "paused": {
+            "type": "boolean"
+          },
+          "pausedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "pausedBy": {
+            "nullable": true,
+            "type": "string"
+          },
+          "reason": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "paused",
+          "reason",
+          "pausedBy",
+          "pausedAt"
+        ],
+        "type": "object"
+      },
+      "InviteInfoDto": {
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "InviteLinkDto": {
+        "properties": {
+          "expiresInHours": {
+            "type": "number"
+          },
+          "invitePath": {
+            "description": "Relative URL of the one-time invite page (shown once)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "invitePath",
+          "expiresInHours"
+        ],
+        "type": "object"
+      },
+      "InviteResultDto": {
+        "properties": {
+          "expiresInHours": {
+            "type": "number"
+          },
+          "invitePath": {
+            "description": "Relative URL of the one-time invite page (shown once)",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDto"
+          }
+        },
+        "required": [
+          "invitePath",
+          "expiresInHours",
+          "user"
+        ],
+        "type": "object"
+      },
+      "InviteUserDto": {
+        "properties": {
+          "canViewBodies": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "viewer"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "type": "object"
+      },
+      "KeyCreatedDto": {
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/KeyDto"
+          },
+          "secret": {
+            "description": "The API key secret. Shown ONCE; only its hash is stored.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "secret"
+        ],
+        "type": "object"
+      },
+      "KeyDto": {
+        "properties": {
+          "allowReplyTo": {
+            "type": "boolean"
+          },
+          "allowedRecipients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "attachmentsAllowed": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "fromAddress": {
+            "type": "string"
+          },
+          "fromName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "liveProvider": {
+            "enum": [
+              "smtp",
+              "resend"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "maxAttachmentBytes": {
+            "type": "number"
+          },
+          "maxMessageBytes": {
+            "type": "number"
+          },
+          "maxRecipientsPerMessage": {
+            "type": "number"
+          },
+          "mode": {
+            "enum": [
+              "sandbox",
+              "live",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefixStale": {
+            "type": "boolean"
+          },
+          "quotaPerDay": {
+            "type": "number"
+          },
+          "quotaPerHour": {
+            "type": "number"
+          },
+          "rotatedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "keyPrefix",
+          "mode",
+          "enabled",
+          "fromAddress",
+          "fromName",
+          "allowReplyTo",
+          "allowedRecipients",
+          "maxRecipientsPerMessage",
+          "maxMessageBytes",
+          "quotaPerHour",
+          "quotaPerDay",
+          "attachmentsAllowed",
+          "maxAttachmentBytes",
+          "liveProvider",
+          "prefixStale",
+          "lastUsedAt",
+          "rotatedAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "KeyListDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KeyWithUsageDto"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "type": "object"
+      },
+      "KeyRefDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "KeyUsageDto": {
+        "properties": {
+          "day": {
+            "type": "number"
+          },
+          "hour": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "hour",
+          "day"
+        ],
+        "type": "object"
+      },
+      "KeyWithUsageDto": {
+        "properties": {
+          "allowReplyTo": {
+            "type": "boolean"
+          },
+          "allowedRecipients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "attachmentsAllowed": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "fromAddress": {
+            "type": "string"
+          },
+          "fromName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "liveProvider": {
+            "enum": [
+              "smtp",
+              "resend"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "maxAttachmentBytes": {
+            "type": "number"
+          },
+          "maxMessageBytes": {
+            "type": "number"
+          },
+          "maxRecipientsPerMessage": {
+            "type": "number"
+          },
+          "mode": {
+            "enum": [
+              "sandbox",
+              "live",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefixStale": {
+            "type": "boolean"
+          },
+          "quotaPerDay": {
+            "type": "number"
+          },
+          "quotaPerHour": {
+            "type": "number"
+          },
+          "rotatedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/KeyUsageDto"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "keyPrefix",
+          "mode",
+          "enabled",
+          "fromAddress",
+          "fromName",
+          "allowReplyTo",
+          "allowedRecipients",
+          "maxRecipientsPerMessage",
+          "maxMessageBytes",
+          "quotaPerHour",
+          "quotaPerDay",
+          "attachmentsAllowed",
+          "maxAttachmentBytes",
+          "liveProvider",
+          "prefixStale",
+          "lastUsedAt",
+          "rotatedAt",
+          "createdAt",
+          "updatedAt",
+          "usage"
+        ],
+        "type": "object"
+      },
+      "LoginBody": {
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "LoginResultDto": {
+        "properties": {
+          "next": {
+            "enum": [
+              "totp_enroll",
+              "totp_verify"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "next"
+        ],
+        "type": "object"
+      },
+      "LogoutDto": {
+        "properties": {
+          "redirect": {
+            "description": "Authentik end-session URL to visit, if any",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MeResponseDto": {
+        "properties": {
+          "allowReplyTo": {
+            "description": "Whether replyTo may be set.",
+            "type": "boolean"
+          },
+          "allowedRecipients": {
+            "description": "Allowed recipients: exact addresses and \"@domain\" entries. Every to/cc/bcc must match one.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "attachmentsAllowed": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "description": "false = key disabled; every send is rejected with KEY_DISABLED.",
+            "type": "boolean"
+          },
+          "fromAddress": {
+            "description": "Fixed sender address used for every message.",
+            "type": "string"
+          },
+          "fromName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "keyPrefix": {
+            "description": "Non-secret display prefix of the key.",
+            "type": "string"
+          },
+          "liveProvider": {
+            "enum": [
+              "smtp",
+              "resend"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "maxAttachmentBytes": {
+            "type": "number"
+          },
+          "maxMessageBytes": {
+            "description": "Max subject+text+html+attachments bytes.",
+            "type": "number"
+          },
+          "maxRecipientsPerMessage": {
+            "description": "Max to+cc+bcc per message.",
+            "type": "number"
+          },
+          "mode": {
+            "description": "sandbox: delivered only to a test inbox (Mailpit). live: real delivery. approval: held until an admin approves.",
+            "enum": [
+              "sandbox",
+              "live",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "quotaPerDay": {
+            "type": "number"
+          },
+          "quotaPerHour": {
+            "type": "number"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/UsageDto"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "keyPrefix",
+          "mode",
+          "enabled",
+          "fromAddress",
+          "allowReplyTo",
+          "allowedRecipients",
+          "maxRecipientsPerMessage",
+          "maxMessageBytes",
+          "quotaPerHour",
+          "quotaPerDay",
+          "attachmentsAllowed",
+          "maxAttachmentBytes",
+          "usage"
+        ],
+        "type": "object"
+      },
+      "MessageActionDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "pending_approval",
+              "sent",
+              "failed",
+              "rejected",
+              "captured"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "MessageDetailDto": {
+        "properties": {
+          "apiKey": {
+            "$ref": "#/components/schemas/MessageKeyRefDto"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentMetaDto"
+            },
+            "type": "array"
+          },
+          "attempts": {
+            "type": "number"
+          },
+          "bcc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "bodiesVisible": {
+            "description": "false when the caller may not see bodies (viewer without canViewBodies)",
+            "type": "boolean"
+          },
+          "bodyHash": {
+            "type": "string"
+          },
+          "bodyPurgedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "deliveryMode": {
+            "enum": [
+              "sandbox",
+              "live",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "deliveryOutcome": {
+            "nullable": true,
+            "type": "string"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/MessageEventDto"
+            },
+            "type": "array"
+          },
+          "fromAddress": {
+            "type": "string"
+          },
+          "fromName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "hasHtml": {
+            "type": "boolean"
+          },
+          "hasText": {
+            "type": "boolean"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "htmlBody": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastError": {
+            "nullable": true,
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "nullable": true,
+            "type": "object"
+          },
+          "provider": {
+            "nullable": true,
+            "type": "string"
+          },
+          "providerMessageId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "providerResponse": {
+            "nullable": true,
+            "type": "string"
+          },
+          "rejectCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "rejectReason": {
+            "nullable": true,
+            "type": "string"
+          },
+          "replyTo": {
+            "nullable": true,
+            "type": "string"
+          },
+          "sentAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "number"
+          },
+          "source": {
+            "type": "string"
+          },
+          "sourceIp": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "pending_approval",
+              "sent",
+              "failed",
+              "rejected",
+              "captured"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "textBody": {
+            "nullable": true,
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "deliveryMode",
+          "provider",
+          "source",
+          "rejectCode",
+          "rejectReason",
+          "fromAddress",
+          "fromName",
+          "to",
+          "cc",
+          "bcc",
+          "replyTo",
+          "subject",
+          "bodyHash",
+          "metadata",
+          "sourceIp",
+          "sizeBytes",
+          "attempts",
+          "lastError",
+          "providerResponse",
+          "providerMessageId",
+          "deliveryOutcome",
+          "bodyPurgedAt",
+          "createdAt",
+          "updatedAt",
+          "sentAt",
+          "apiKey",
+          "attachments",
+          "events",
+          "headers",
+          "bodiesVisible",
+          "textBody",
+          "htmlBody",
+          "hasHtml",
+          "hasText"
+        ],
+        "type": "object"
+      },
+      "MessageEventDto": {
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "nullable": true,
+            "type": "object"
+          },
+          "fromStatus": {
+            "enum": [
+              "queued",
+              "pending_approval",
+              "sent",
+              "failed",
+              "rejected",
+              "captured"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "toStatus": {
+            "enum": [
+              "queued",
+              "pending_approval",
+              "sent",
+              "failed",
+              "rejected",
+              "captured"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "status",
+              "attempt",
+              "provider_event",
+              "admin"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "fromStatus",
+          "toStatus",
+          "detail",
+          "at"
+        ],
+        "type": "object"
+      },
+      "MessageKeyRefDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "sandbox",
+              "live",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mode"
+        ],
+        "type": "object"
+      },
+      "MessageListDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MessageListItemDto"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "type": "object"
+      },
+      "MessageListItemDto": {
+        "properties": {
+          "apiKey": {
+            "$ref": "#/components/schemas/KeyRefDto"
+          },
+          "attempts": {
+            "type": "number"
+          },
+          "bcc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "deliveryMode": {
+            "enum": [
+              "sandbox",
+              "live",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "deliveryOutcome": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "smtp",
+              "resend",
+              "mailpit"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "rejectCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "sentAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "api",
+              "admin_test"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "pending_approval",
+              "sent",
+              "failed",
+              "rejected",
+              "captured"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "deliveryMode",
+          "provider",
+          "source",
+          "to",
+          "cc",
+          "bcc",
+          "subject",
+          "rejectCode",
+          "attempts",
+          "deliveryOutcome",
+          "createdAt",
+          "sentAt",
+          "apiKey"
+        ],
+        "type": "object"
+      },
+      "MessageStatusDto": {
+        "properties": {
+          "attempts": {
+            "description": "Delivery attempts so far.",
+            "type": "number"
+          },
+          "bcc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "deliveryOutcome": {
+            "description": "Provider-reported outcome when available: delivered, bounced, complained, delayed.",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastError": {
+            "nullable": true,
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "sandbox",
+              "live",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "smtp",
+              "resend",
+              "mailpit"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "rejectCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "rejectReason": {
+            "nullable": true,
+            "type": "string"
+          },
+          "sentAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "pending_approval",
+              "sent",
+              "failed",
+              "rejected",
+              "captured"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "mode",
+          "to",
+          "cc",
+          "bcc",
+          "subject",
+          "attempts",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "OutcomeCountDto": {
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "outcome": {
+            "enum": [
+              "delivered",
+              "delayed",
+              "bounced",
+              "complained"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "count"
+        ],
+        "type": "object"
+      },
+      "PasswordBody": {
+        "properties": {
+          "password": {
+            "description": "At least 12 characters",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
+      "PauseBody": {
+        "properties": {
+          "reason": {
+            "description": "Why the gateway is paused (shown in the UI and audit log).",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "QueueDepthDto": {
+        "properties": {
+          "active": {
+            "type": "number"
+          },
+          "delayed": {
+            "type": "number"
+          },
+          "failed": {
+            "type": "number"
+          },
+          "paused": {
+            "type": "number"
+          },
+          "prioritized": {
+            "type": "number"
+          },
+          "waiting": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "waiting",
+          "active",
+          "delayed",
+          "failed",
+          "paused",
+          "prioritized"
+        ],
+        "type": "object"
+      },
+      "ReasonCountDto": {
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "count"
+        ],
+        "type": "object"
+      },
+      "RejectBody": {
+        "properties": {
+          "reason": {
+            "description": "Shown to the client as rejectReason.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ResendSettingsDto": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "webhookConfigured": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "webhookConfigured"
+        ],
+        "type": "object"
+      },
+      "SendAcceptedDto": {
+        "properties": {
+          "id": {
+            "description": "Message id. Use GET /v1/messages/{id} to follow delivery.",
+            "type": "string"
+          },
+          "status": {
+            "description": "queued: will be delivered (sandbox → Mailpit). pending_approval: waiting for an administrator.",
+            "enum": [
+              "queued",
+              "pending_approval"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "SendDto": {
+        "properties": {
+          "attachments": {
+            "description": "Base64 attachments. Only accepted if your key policy has attachmentsAllowed=true.",
+            "items": {
+              "$ref": "#/components/schemas/AttachmentDto"
+            },
+            "type": "array"
+          },
+          "bcc": {
+            "description": "BCC address(es). Same rules as \"to\"; counts toward maxRecipientsPerMessage.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "cc": {
+            "description": "CC address(es). Same rules as \"to\"; counts toward maxRecipientsPerMessage.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "html": {
+            "description": "HTML body. At least one of \"text\" or \"html\" is required. Prefer also sending \"text\".",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "description": "Arbitrary JSON object (max 8 KB) stored with the message for your own correlation. Never sent to recipients.",
+            "type": "object"
+          },
+          "replyTo": {
+            "description": "Reply-To address. Only accepted if your key policy has allowReplyTo=true.",
+            "type": "string"
+          },
+          "subject": {
+            "description": "Subject line. Required, 1-998 characters, no line breaks.",
+            "example": "Nightly report",
+            "type": "string"
+          },
+          "text": {
+            "description": "Plain-text body. At least one of \"text\" or \"html\" is required.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Recipient address or list of addresses (plain addresses only, e.g. \"user@example.com\"). Every address must be allowed by your key's policy (allowedRecipients); call GET /v1/me to check.",
+            "example": [
+              "user@example.com"
+            ],
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          }
+        },
+        "required": [
+          "to",
+          "subject"
+        ],
+        "type": "object"
+      },
+      "SeriesPointDto": {
+        "properties": {
+          "accepted": {
+            "type": "number"
+          },
+          "captured": {
+            "type": "number"
+          },
+          "failed": {
+            "type": "number"
+          },
+          "rejected": {
+            "type": "number"
+          },
+          "sent": {
+            "type": "number"
+          },
+          "t": {
+            "description": "Bucket start (ISO)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "t",
+          "accepted",
+          "sent",
+          "captured",
+          "failed",
+          "rejected"
+        ],
+        "type": "object"
+      },
+      "SessionDto": {
+        "properties": {
+          "csrfToken": {
+            "description": "Send as X-CSRF-Token on every state-changing request",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDto"
+          }
+        },
+        "required": [
+          "user",
+          "csrfToken"
+        ],
+        "type": "object"
+      },
+      "SettingsDto": {
+        "properties": {
+          "adminTokenEnabled": {
+            "type": "boolean"
+          },
+          "authentik": {
+            "$ref": "#/components/schemas/AuthentikSettingsDto"
+          },
+          "bodyRetentionDays": {
+            "type": "number"
+          },
+          "breakerConsecutiveFailures": {
+            "type": "number"
+          },
+          "breakerFailureRate": {
+            "type": "number"
+          },
+          "breakerWindowSeconds": {
+            "type": "number"
+          },
+          "dedupWindowSeconds": {
+            "type": "number"
+          },
+          "deliveryMaxAttempts": {
+            "type": "number"
+          },
+          "globalAcceptPerHour": {
+            "type": "number"
+          },
+          "globalRateDurationMs": {
+            "type": "number"
+          },
+          "globalRateMax": {
+            "type": "number"
+          },
+          "idempotencyTtlSeconds": {
+            "type": "number"
+          },
+          "liveProvider": {
+            "enum": [
+              "smtp",
+              "resend"
+            ],
+            "type": "string"
+          },
+          "localLogin": {
+            "type": "boolean"
+          },
+          "mailpitSmtp": {
+            "type": "string"
+          },
+          "mailpitUiUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "maxRequestBytes": {
+            "type": "number"
+          },
+          "recordRetentionDays": {
+            "type": "number"
+          },
+          "resend": {
+            "$ref": "#/components/schemas/ResendSettingsDto"
+          },
+          "retentionCron": {
+            "type": "string"
+          },
+          "sessionIdleMinutes": {
+            "type": "number"
+          },
+          "sessionTtlHours": {
+            "type": "number"
+          },
+          "smtp": {
+            "$ref": "#/components/schemas/SmtpSettingsDto"
+          },
+          "trustProxy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "liveProvider",
+          "smtp",
+          "resend",
+          "mailpitSmtp",
+          "mailpitUiUrl",
+          "bodyRetentionDays",
+          "recordRetentionDays",
+          "retentionCron",
+          "globalRateMax",
+          "globalRateDurationMs",
+          "globalAcceptPerHour",
+          "dedupWindowSeconds",
+          "idempotencyTtlSeconds",
+          "deliveryMaxAttempts",
+          "breakerConsecutiveFailures",
+          "breakerFailureRate",
+          "breakerWindowSeconds",
+          "maxRequestBytes",
+          "trustProxy",
+          "localLogin",
+          "adminTokenEnabled",
+          "sessionTtlHours",
+          "sessionIdleMinutes",
+          "authentik"
+        ],
+        "type": "object"
+      },
+      "SmtpSettingsDto": {
+        "properties": {
+          "authConfigured": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "host": {
+            "nullable": true,
+            "type": "string"
+          },
+          "port": {
+            "type": "number"
+          },
+          "requireTls": {
+            "type": "boolean"
+          },
+          "secure": {
+            "description": "implicit TLS",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "host",
+          "port",
+          "secure",
+          "requireTls",
+          "authConfigured"
+        ],
+        "type": "object"
+      },
+      "StatsOverviewDto": {
+        "properties": {
+          "bucket": {
+            "enum": [
+              "hour",
+              "day"
+            ],
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/OutcomeCountDto"
+            },
+            "type": "array"
+          },
+          "rejectionsByReason": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonCountDto"
+            },
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesPointDto"
+            },
+            "type": "array"
+          },
+          "to": {
+            "type": "string"
+          },
+          "topKeys": {
+            "items": {
+              "$ref": "#/components/schemas/TopKeyDto"
+            },
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/TotalsDto"
+          }
+        },
+        "required": [
+          "bucket",
+          "from",
+          "to",
+          "totals",
+          "series",
+          "rejectionsByReason",
+          "topKeys",
+          "outcomes"
+        ],
+        "type": "object"
+      },
+      "SystemStateDto": {
+        "properties": {
+          "breakers": {
+            "items": {
+              "$ref": "#/components/schemas/BreakerDto"
+            },
+            "type": "array"
+          },
+          "gateway": {
+            "$ref": "#/components/schemas/GatewayStateDto"
+          },
+          "pendingApprovals": {
+            "type": "number"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueDepthDto"
+          },
+          "smtpHealth": {
+            "$ref": "#/components/schemas/CheckDto"
+          }
+        },
+        "required": [
+          "gateway",
+          "breakers",
+          "queue",
+          "pendingApprovals",
+          "smtpHealth"
+        ],
+        "type": "object"
+      },
+      "TestSendDto": {
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "to": {
+            "description": "Recipient (must be allowed by the key policy)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "type": "object"
+      },
+      "TopKeyDto": {
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "keyId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyId",
+          "name",
+          "count"
+        ],
+        "type": "object"
+      },
+      "TotalsDto": {
+        "properties": {
+          "accepted": {
+            "type": "number"
+          },
+          "captured": {
+            "type": "number"
+          },
+          "failed": {
+            "type": "number"
+          },
+          "rejected": {
+            "type": "number"
+          },
+          "sent": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "accepted",
+          "sent",
+          "captured",
+          "failed",
+          "rejected"
+        ],
+        "type": "object"
+      },
+      "TotpEnrollDto": {
+        "properties": {
+          "otpauthUri": {
+            "type": "string"
+          },
+          "qrDataUrl": {
+            "description": "PNG data URL of the QR code",
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "otpauthUri",
+          "qrDataUrl"
+        ],
+        "type": "object"
+      },
+      "UpdateKeyDto": {
+        "properties": {
+          "allowReplyTo": {
+            "type": "boolean"
+          },
+          "allowedRecipients": {
+            "description": "Exact addresses (\"ops@example.com\") and/or domains (\"@example.com\"). Empty = reject everything.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "attachmentsAllowed": {
+            "type": "boolean"
+          },
+          "description": {
+            "description": "Free text description of what this key is for.",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "fromAddress": {
+            "description": "Fixed sender address (required on create). Clients cannot override it.",
+            "type": "string"
+          },
+          "fromName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "liveProvider": {
+            "description": "Live provider override; null = gateway default (LIVE_PROVIDER).",
+            "enum": [
+              "smtp",
+              "resend"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "maxAttachmentBytes": {
+            "type": "number"
+          },
+          "maxMessageBytes": {
+            "type": "number"
+          },
+          "maxRecipientsPerMessage": {
+            "type": "number"
+          },
+          "mode": {
+            "description": "sandbox: delivered to Mailpit only. live: delivered for real. approval: held until an admin approves, then delivered live.",
+            "enum": [
+              "sandbox",
+              "live",
+              "approval"
+            ],
+            "type": "string"
+          },
+          "quotaPerDay": {
+            "type": "number"
+          },
+          "quotaPerHour": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateUserDto": {
+        "properties": {
+          "canViewBodies": {
+            "type": "boolean"
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "viewer"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UsageDto": {
+        "properties": {
+          "day": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsageWindowDto"
+              }
+            ],
+            "description": "Current UTC day."
+          },
+          "hour": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UsageWindowDto"
+              }
+            ],
+            "description": "Current UTC hour."
+          }
+        },
+        "required": [
+          "hour",
+          "day"
+        ],
+        "type": "object"
+      },
+      "UsageWindowDto": {
+        "properties": {
+          "limit": {
+            "type": "number"
+          },
+          "remaining": {
+            "type": "number"
+          },
+          "used": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "used",
+          "limit",
+          "remaining"
+        ],
+        "type": "object"
+      },
+      "UserDto": {
+        "properties": {
+          "authSource": {
+            "enum": [
+              "local",
+              "authentik"
+            ],
+            "type": "string"
+          },
+          "canViewBodies": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastLoginAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pendingInvite": {
+            "type": "boolean"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "viewer"
+            ],
+            "type": "string"
+          },
+          "totpEnrolled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "canViewBodies",
+          "authSource",
+          "totpEnrolled",
+          "disabled",
+          "locked",
+          "pendingInvite",
+          "lastLoginAt",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "UserListDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserDto"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "admin": {
+        "bearerFormat": "JWT",
+        "description": "Static admin token (automation only)",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "apiKey": {
+        "bearerFormat": "JWT",
+        "description": "API key: mk_sbx_... or mk_live_...",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "session": {
+        "description": "Admin UI session (+ X-CSRF-Token header on mutations)",
+        "in": "cookie",
+        "name": "mg_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "Central mail-sending gateway for internal applications and LLM agents.\n\n**How to use it (agents: read this):**\n1. Authenticate every request with `Authorization: Bearer mk_...` (your API key).\n2. Call `GET /v1/me` first. It tells you your fixed sender, which recipients you may email (exact addresses or \"@domain\"),\n   size limits, whether attachments/replyTo are allowed, and your remaining hourly/daily quota.\n3. Send with `POST /v1/send`. Only recipients allowed by your policy are accepted; the sender cannot be changed.\n4. Follow delivery with `GET /v1/messages/{id}`.\n\n**Errors** always look like `{\"error\":{\"code\":\"...\",\"message\":\"...\",\"details\":{...}}}`. The message says what to change.\nDo not retry `RECIPIENT_NOT_ALLOWED`, `KEY_DISABLED`, `FROM_NOT_ALLOWED` or validation errors unchanged.\nRespect `Retry-After` for `QUOTA_EXCEEDED`, `GLOBAL_RATE_LIMITED` and `GATEWAY_PAUSED`.\n`DUPLICATE_MESSAGE` means you already sent the same message recently: you are probably looping, so stop.\nTo retry safely after a timeout, resend with the same `Idempotency-Key` header.\n\nSandbox keys (`mk_sbx_`) deliver only to a test inbox; nothing reaches real recipients.",
+    "title": "mail-gateway",
+    "version": "1"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/admin/audit": {
+      "get": {
+        "operationId": "adminListAudit",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "enum": [
+                "success",
+                "failure"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actorType",
+            "required": false,
+            "schema": {
+              "enum": [
+                "user",
+                "token",
+                "cli",
+                "system"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Admin activity log",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/auth/authentik/callback": {
+      "get": {
+        "operationId": "authAuthentikCallback",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/authentik/login": {
+      "get": {
+        "operationId": "authAuthentikLogin",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Redirects to Authentik.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/config": {
+      "get": {
+        "operationId": "authConfig",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfigDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/invite/{token}": {
+      "get": {
+        "operationId": "authInviteInfo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteInfoDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "operationId": "authInviteAccept",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteInfoDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Set the password from an invite link. Then log in and enroll TOTP.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/login": {
+      "post": {
+        "operationId": "authLogin",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Step 1: email + password. Sets a short-lived pre-MFA session cookie.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/logout": {
+      "post": {
+        "operationId": "authLogout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/session": {
+      "get": {
+        "operationId": "authSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Current user + CSRF token. 401 when not logged in.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/totp/enroll": {
+      "post": {
+        "operationId": "authTotpEnroll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpEnrollDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Step 2a (first login): get a TOTP secret + QR code.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/totp/verify": {
+      "post": {
+        "operationId": "authTotpVerify",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Step 2: verify the TOTP code. Issues the full session cookie.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/gateway": {
+      "get": {
+        "operationId": "adminGatewayState",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayStateDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/gateway/pause": {
+      "post": {
+        "operationId": "adminPauseGateway",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayStateDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Stop accepting and delivering mail.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/gateway/resume": {
+      "post": {
+        "operationId": "adminResumeGateway",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayStateDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Resume and reset circuit breakers.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/keys": {
+      "get": {
+        "operationId": "adminListKeys",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "name",
+                "createdAt",
+                "lastUsedAt"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "enabled",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "enum": [
+                "sandbox",
+                "live",
+                "approval"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "List API keys with current hour/day usage",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "adminCreateKey",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateKeyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyCreatedDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Create an API key. The secret is returned ONCE.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/keys/{id}": {
+      "delete": {
+        "operationId": "adminDeleteKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      },
+      "get": {
+        "operationId": "adminGetKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyWithUsageDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "adminUpdateKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateKeyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Update policy fields (mode, recipients, quotas, ...). Takes effect immediately.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/keys/{id}/disable": {
+      "post": {
+        "operationId": "adminDisableKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Kill switch for one key.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/keys/{id}/enable": {
+      "post": {
+        "operationId": "adminEnableKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/keys/{id}/rotate": {
+      "post": {
+        "operationId": "adminRotateKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyCreatedDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Rotate the secret. The old secret stops working immediately; the new one is returned ONCE.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/keys/{id}/test-send": {
+      "post": {
+        "operationId": "adminTestSend",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestSendDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendAcceptedDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Send a test email through the normal pipeline using this key (policy fully enforced).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/messages": {
+      "get": {
+        "operationId": "adminListMessages",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "createdAt",
+                "status",
+                "subject"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "ISO date",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "description": "ISO date",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "subject",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "recipient",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "keyId",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "description": "Comma list of queued, pending_approval, sent, failed, rejected, captured",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Search messages (status, key, recipient, subject, date range)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/messages/approve": {
+      "post": {
+        "operationId": "adminBulkApprove",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/messages/reject": {
+      "post": {
+        "operationId": "adminBulkReject",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/messages/{id}": {
+      "get": {
+        "operationId": "adminGetMessage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageDetailDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Message detail. Bodies are null for viewers without canViewBodies.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/messages/{id}/approve": {
+      "post": {
+        "operationId": "adminApproveMessage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageActionDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/messages/{id}/preview": {
+      "get": {
+        "operationId": "adminPreviewMessage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "remoteImages",
+            "required": false,
+            "schema": {
+              "enum": [
+                "0",
+                "1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "HTML body for a sandboxed iframe (strict CSP; remote images blocked unless remoteImages=1).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/messages/{id}/reject": {
+      "post": {
+        "operationId": "adminRejectMessage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageActionDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/settings": {
+      "get": {
+        "operationId": "adminSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Effective configuration (read-only, never secrets)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/stats/overview": {
+      "get": {
+        "operationId": "adminStatsOverview",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keyId",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "bucket",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsOverviewDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Time series + breakdowns from the hourly roll-up",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/stats/system": {
+      "get": {
+        "operationId": "adminSystemState",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStateDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Gateway state, breakers, queue depth, pending approvals, SMTP health",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "operationId": "adminListUsers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "adminInviteUser",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteUserDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteResultDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Create a local user and return a one-time invite link (shown once).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users/{id}": {
+      "delete": {
+        "operationId": "adminDeleteUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "adminUpdateUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Change role/body access, enable/disable.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users/{id}/reset-2fa": {
+      "post": {
+        "operationId": "adminResetUserTotp",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Force TOTP re-enrollment at next login (signs the user out).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/users/{id}/reset-access": {
+      "post": {
+        "operationId": "adminResetUserAccess",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteLinkDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Clear password + TOTP and issue a new invite link.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "description": "Returns the calling key's policy (allowed recipients, limits, quotas, mode) and current quota usage. Call this before sending.",
+        "operationId": "getMyPolicy",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Discover what your API key is allowed to do",
+        "tags": [
+          "send"
+        ]
+      }
+    },
+    "/v1/messages/{id}": {
+      "get": {
+        "description": "Status values: queued, pending_approval (waiting for an admin), sent (accepted by the live provider), captured (sandbox: delivered to Mailpit only), failed, rejected. Only messages sent with the calling key are visible.",
+        "operationId": "getMessageStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageStatusDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "MESSAGE_NOT_FOUND"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Get the delivery status of one of your messages",
+        "tags": [
+          "send"
+        ]
+      }
+    },
+    "/v1/send": {
+      "post": {
+        "description": "Queues one email. The sender (from) is fixed by your API key and cannot be set. All recipients (to, cc, bcc) must be allowed by your key policy, and the message must fit your size, attachment and quota limits; call GET /v1/me first to discover them. Identical messages within the dedup window are rejected with DUPLICATE_MESSAGE (do not loop). To retry safely after a network error, resend with the same Idempotency-Key header: the original message is returned instead of a new one. On error, read error.code and error.message: they say exactly what to change.",
+        "operationId": "sendEmail",
+        "parameters": [
+          {
+            "description": "Optional, 1-255 printable ASCII chars. Same key within 24h returns the original message.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendAcceptedDto"
+                }
+              }
+            },
+            "description": "Accepted. Header Idempotent-Replayed: true when an earlier request with the same Idempotency-Key is returned."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "VALIDATION_FAILED, FROM_NOT_ALLOWED, TOO_MANY_RECIPIENTS, REPLY_TO_NOT_ALLOWED, ATTACHMENTS_NOT_ALLOWED"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "UNAUTHORIZED, INVALID_API_KEY"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "RECIPIENT_NOT_ALLOWED, KEY_DISABLED"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "DUPLICATE_MESSAGE, IDEMPOTENCY_CONFLICT"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "MESSAGE_TOO_LARGE, ATTACHMENT_TOO_LARGE, REQUEST_TOO_LARGE"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "QUOTA_EXCEEDED, GLOBAL_RATE_LIMITED, AUTH_RATE_LIMITED (see Retry-After)"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "GATEWAY_PAUSED, PROVIDER_UNAVAILABLE, QUEUE_UNAVAILABLE"
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Queue an email for delivery",
+        "tags": [
+          "send"
+        ]
+      }
+    }
+  },
+  "servers": [],
+  "tags": [
+    {
+      "description": "Public API for applications and agents",
+      "name": "send"
+    },
+    {
+      "description": "Administration API",
+      "name": "admin"
+    },
+    {
+      "description": "Admin UI authentication",
+      "name": "auth"
+    }
+  ]
+}

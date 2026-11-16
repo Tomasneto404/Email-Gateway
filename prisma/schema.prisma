@@ -1,0 +1,274 @@
+// mail-gateway schema. Migrations are committed under prisma/migrations.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum KeyMode {
+  sandbox
+  live
+  approval
+}
+
+enum LiveProvider {
+  smtp
+  resend
+}
+
+enum DeliveryProvider {
+  smtp
+  resend
+  mailpit
+}
+
+enum MessageStatus {
+  queued
+  pending_approval
+  sent
+  failed
+  rejected
+  captured
+}
+
+enum MessageSource {
+  api
+  admin_test
+}
+
+/// An API key and its (1:1, embedded) sending policy.
+model ApiKey {
+  id                      String        @id @default(uuid(7)) @db.Uuid
+  name                    String        @unique
+  description             String        @default("")
+  keyHash                 String        @unique @map("key_hash")
+  keyPrefix               String        @map("key_prefix")
+  mode                    KeyMode       @default(sandbox)
+  enabled                 Boolean       @default(true)
+  fromAddress             String        @map("from_address")
+  fromName                String?       @map("from_name")
+  allowReplyTo            Boolean       @default(false) @map("allow_reply_to")
+  allowedRecipients       String[]      @default([]) @map("allowed_recipients")
+  maxRecipientsPerMessage Int           @map("max_recipients_per_message")
+  maxMessageBytes         Int           @map("max_message_bytes")
+  quotaPerHour            Int           @map("quota_per_hour")
+  quotaPerDay             Int           @map("quota_per_day")
+  attachmentsAllowed      Boolean       @default(false) @map("attachments_allowed")
+  maxAttachmentBytes      Int           @map("max_attachment_bytes")
+  /// null = use LIVE_PROVIDER
+  liveProvider            LiveProvider? @map("live_provider")
+  lastUsedAt              DateTime?     @map("last_used_at") @db.Timestamptz(3)
+  rotatedAt               DateTime?     @map("rotated_at") @db.Timestamptz(3)
+  deletedAt               DateTime?     @map("deleted_at") @db.Timestamptz(3)
+  createdAt               DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  messages Message[]
+
+  @@map("api_keys")
+}
+
+/// Audit log of every send request after authentication (accepted or rejected).
+model Message {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  apiKeyId          String            @map("api_key_id") @db.Uuid
+  status            MessageStatus
+  deliveryMode      KeyMode           @map("delivery_mode")
+  provider          DeliveryProvider?
+  source            MessageSource     @default(api)
+  rejectCode        String?           @map("reject_code")
+  rejectReason      String?           @map("reject_reason")
+  fromAddress       String            @map("from_address")
+  fromName          String?           @map("from_name")
+  to                String[]          @default([])
+  cc                String[]          @default([])
+  bcc               String[]          @default([])
+  replyTo           String?           @map("reply_to")
+  subject           String            @default("")
+  textBody          String?           @map("text_body")
+  htmlBody          String?           @map("html_body")
+  bodyHash          String            @map("body_hash")
+  dedupHash         String?           @map("dedup_hash")
+  idempotencyKey    String?           @map("idempotency_key")
+  metadata          Json?
+  sourceIp          String?           @map("source_ip")
+  sizeBytes         Int               @default(0) @map("size_bytes")
+  attempts          Int               @default(0)
+  lastError         String?           @map("last_error")
+  providerResponse  String?           @map("provider_response")
+  providerMessageId String?           @map("provider_message_id")
+  headerMessageId   String?           @map("header_message_id")
+  deliveryOutcome   String?           @map("delivery_outcome")
+  bodyPurgedAt      DateTime?         @map("body_purged_at") @db.Timestamptz(3)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sentAt            DateTime?         @map("sent_at") @db.Timestamptz(3)
+
+  apiKey      ApiKey              @relation(fields: [apiKeyId], references: [id])
+  attachments MessageAttachment[]
+  events      MessageEvent[]
+
+  @@unique([apiKeyId, idempotencyKey])
+  @@index([createdAt(sort: Desc)])
+  @@index([apiKeyId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([providerMessageId])
+  @@index([to], type: Gin)
+  @@index([subject(ops: raw("gin_trgm_ops"))], type: Gin, map: "messages_subject_trgm_idx")
+  @@map("messages")
+}
+
+model MessageAttachment {
+  id          String @id @default(uuid(7)) @db.Uuid
+  messageId   String @map("message_id") @db.Uuid
+  filename    String
+  contentType String @map("content_type")
+  sizeBytes   Int    @map("size_bytes")
+  /// Purged by retention.
+  content     Bytes?
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("message_attachments")
+}
+
+/// Status timeline + delivery attempts + provider (webhook) events.
+model MessageEvent {
+  id         String         @id @default(uuid(7)) @db.Uuid
+  messageId  String         @map("message_id") @db.Uuid
+  /// status | attempt | provider_event | admin
+  type       String
+  fromStatus MessageStatus? @map("from_status")
+  toStatus   MessageStatus? @map("to_status")
+  detail     Json?
+  at         DateTime       @default(now()) @db.Timestamptz(3)
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, at])
+  @@map("message_events")
+}
+
+/// Hourly roll-up maintained on every status transition, so dashboards never scan `messages`.
+model MessageStatsHourly {
+  bucket   DateTime @db.Timestamptz(3)
+  apiKeyId String   @map("api_key_id") @db.Uuid
+  /// message status, or `outcome:<delivered|bounced|complained|delayed>`
+  status   String
+  /// reject code for status=rejected, '' otherwise
+  reason   String   @default("")
+  count    Int      @default(0)
+
+  @@id([bucket, apiKeyId, status, reason])
+  @@index([bucket])
+  @@map("message_stats_hourly")
+}
+
+/// Singleton row (id = 1).
+model GatewayState {
+  id               Int       @id @default(1)
+  paused           Boolean   @default(false)
+  reason           String?
+  pausedBy         String?   @map("paused_by")
+  pausedAt         DateTime? @map("paused_at") @db.Timestamptz(3)
+  breakerTrippedAt DateTime? @map("breaker_tripped_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("gateway_state")
+}
+
+model AdminAudit {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  at         DateTime @default(now()) @db.Timestamptz(3)
+  /// user | token | cli | system
+  actorType  String   @map("actor_type")
+  actorId    String?  @map("actor_id")
+  actorLabel String   @map("actor_label")
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  details    Json?
+  ip         String?
+  /// success | failure
+  outcome    String   @default("success")
+
+  @@index([at(sort: Desc)])
+  @@index([action, at(sort: Desc)])
+  @@index([actorType, actorId])
+  @@map("admin_audit")
+}
+
+enum AdminRole {
+  admin
+  viewer
+}
+
+/// Human administrators (local password + mandatory TOTP, or Authentik SSO).
+model AdminUser {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  email         String    @unique
+  name          String    @default("")
+  role          AdminRole @default(viewer)
+  canViewBodies Boolean   @default(false) @map("can_view_bodies")
+  /// argon2id; null for SSO-only users and pending invites
+  passwordHash  String?   @map("password_hash")
+  /// AES-256-GCM(APP_ENCRYPTION_KEY) of the base32 TOTP secret
+  totpSecretEnc String?   @map("totp_secret_enc")
+  totpEnrolled  Boolean   @default(false) @map("totp_enrolled")
+  /// last accepted TOTP time-step (replay protection)
+  totpLastStep  Int?      @map("totp_last_step")
+  failedLogins  Int       @default(0) @map("failed_logins")
+  lockedUntil   DateTime? @map("locked_until") @db.Timestamptz(3)
+  disabled      Boolean   @default(false)
+  /// local | authentik
+  authSource    String    @default("local") @map("auth_source")
+  oidcSubject   String?   @unique @map("oidc_subject")
+  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions AdminSession[]
+  invites  AdminInvite[]
+
+  @@map("admin_users")
+}
+
+model AdminSession {
+  /// sha256 of the session cookie value
+  idHash      String   @id @map("id_hash")
+  userId      String   @map("user_id") @db.Uuid
+  mfaPassed   Boolean  @default(false) @map("mfa_passed")
+  csrfToken   String   @map("csrf_token")
+  ip          String?
+  userAgent   String?  @map("user_agent")
+  /// id_token kept for Authentik RP-initiated logout
+  idTokenHint String?  @map("id_token_hint")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+model AdminInvite {
+  tokenHash String    @id @map("token_hash")
+  userId    String    @map("user_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("admin_invites")
+}

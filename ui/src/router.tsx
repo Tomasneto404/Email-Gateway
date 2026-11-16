@@ -1,0 +1,102 @@
+import type { QueryClient } from '@tanstack/react-query';
+import { Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useParams } from '@tanstack/react-router';
+import { sessionQuery } from '@/api/queries';
+import { AppShell } from '@/components/layout/app-shell';
+import { ActivityPage } from '@/pages/activity';
+import { DashboardPage } from '@/pages/dashboard';
+import { KeyDetailPage, KeysPage } from '@/pages/keys';
+import { InvitePage, LoginPage } from '@/pages/login';
+import { ApprovalsPage, MessagesPage } from '@/pages/messages';
+import { SettingsPage } from '@/pages/settings';
+import { UsersPage } from '@/pages/users';
+
+/** Keeps only known, well-typed search params (URL is the source of truth for table state). */
+function pick(allowed: Record<string, 'string' | 'number'>) {
+  return (s: Record<string, unknown>) => {
+    const out: Record<string, unknown> = {};
+    for (const [k, t] of Object.entries(allowed)) {
+      const v = s[k];
+      if (v === undefined || v === '' || v === null) continue;
+      if (t === 'number') {
+        const n = Number(v);
+        if (Number.isInteger(n) && n > 0) out[k] = n;
+      } else out[k] = String(v);
+    }
+    return out;
+  };
+}
+
+const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({ component: Outlet });
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'login',
+  validateSearch: (s: Record<string, unknown>): { error?: string } => ({ error: typeof s.error === 'string' ? s.error : undefined }),
+  component: LoginPage,
+});
+
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'invite/$token',
+  component: function Invite() {
+    const { token } = useParams({ from: '/invite/$token' });
+    return <InvitePage token={token} />;
+  },
+});
+
+const appRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'app',
+  beforeLoad: async ({ context }) => {
+    try {
+      const session = await context.queryClient.ensureQueryData(sessionQuery);
+      return { session };
+    } catch {
+      throw redirect({ to: '/login', search: { error: undefined } });
+    }
+  },
+  component: AppShell,
+});
+
+const adminOnly = async ({ context }: { context: { queryClient: QueryClient } }) => {
+  const s = await context.queryClient.ensureQueryData(sessionQuery);
+  if (s.user.role !== 'admin') throw redirect({ to: '/' });
+};
+
+const routes = [
+  createRoute({ getParentRoute: () => appRoute, path: '/', component: DashboardPage }),
+  createRoute({
+    getParentRoute: () => appRoute,
+    path: 'keys',
+    validateSearch: pick({ q: 'string', mode: 'string', page: 'number', sort: 'string', order: 'string' }),
+    component: KeysPage,
+  }),
+  createRoute({ getParentRoute: () => appRoute, path: 'keys/$keyId', component: KeyDetailPage }),
+  createRoute({
+    getParentRoute: () => appRoute,
+    path: 'messages',
+    validateSearch: pick({ status: 'string', keyId: 'string', recipient: 'string', subject: 'string', from: 'string', to: 'string', page: 'number', sort: 'string', order: 'string', id: 'string' }),
+    component: MessagesPage,
+  }),
+  createRoute({ getParentRoute: () => appRoute, path: 'approvals', validateSearch: pick({ id: 'string', page: 'number' }), component: ApprovalsPage }),
+  createRoute({ getParentRoute: () => appRoute, path: 'users', beforeLoad: adminOnly, component: UsersPage }),
+  createRoute({
+    getParentRoute: () => appRoute,
+    path: 'activity',
+    validateSearch: pick({ action: 'string', actor: 'string', actorType: 'string', outcome: 'string', page: 'number' }),
+    component: ActivityPage,
+  }),
+  createRoute({ getParentRoute: () => appRoute, path: 'settings', component: SettingsPage }),
+];
+
+const routeTree = rootRoute.addChildren([loginRoute, inviteRoute, appRoute.addChildren(routes)]);
+
+export function makeRouter(queryClient: QueryClient) {
+  return createRouter({ routeTree, basepath: '/ui', context: { queryClient }, defaultPreload: 'intent', scrollRestoration: true });
+}
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: ReturnType<typeof makeRouter>;
+  }
+}
