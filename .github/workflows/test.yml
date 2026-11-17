@@ -1,0 +1,126 @@
+# Test — typecheck, unit and integration tests (GitHub Actions version).
+#
+# Differences from .forgejo/workflows/test.yml: on GitHub the job runs directly on the VM, so
+# `services:` are reached through mapped ports on localhost (not by service name).
+name: Test
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: test-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck + unit tests
+    runs-on: ubuntu-24.04
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      MG_TEST_SERVICES: external
+      TEST_REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install (backend + ui workspace)
+        run: npm ci
+
+      - name: Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck backend
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Typecheck UI (against the committed OpenAPI client)
+        run: |
+          npm run gen:api -w ui
+          git diff --exit-code -- ui/src/api/schema.d.ts || { echo "::error::ui/src/api/schema.d.ts is stale: run 'npm run openapi:export && npm run gen:api -w ui'"; exit 1; }
+          npm run typecheck -w ui
+
+      - name: Backend unit tests (includes OpenAPI drift check)
+        run: npx vitest run --project unit
+
+      - name: UI component tests
+        run: npm run test -w ui
+
+      - name: Build (backend + UI)
+        run: |
+          npm run build
+          npm run build -w ui
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: mailgw
+          POSTGRES_PASSWORD: mailgw
+          POSTGRES_DB: mailgw_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mailgw -d mailgw_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+      mailpit-sandbox:
+        image: axllent/mailpit:v1.33.1
+        env:
+          MP_SMTP_AUTH_ACCEPT_ANY: "1"
+          MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+        ports: ["1025:1025", "8025:8025"]
+      mailpit-live:
+        image: axllent/mailpit:v1.33.1
+        env:
+          MP_SMTP_AUTH_ACCEPT_ANY: "1"
+          MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+        ports: ["2025:1025", "9025:8025"]
+    env:
+      MG_TEST_SERVICES: external
+      TEST_DATABASE_URL: postgresql://mailgw:mailgw@127.0.0.1:5432/mailgw_test
+      TEST_REDIS_URL: redis://127.0.0.1:6379
+      TEST_SANDBOX_SMTP_HOST: 127.0.0.1
+      TEST_SANDBOX_SMTP_PORT: "1025"
+      TEST_SANDBOX_API: http://127.0.0.1:8025
+      TEST_LIVE_SMTP_HOST: 127.0.0.1
+      TEST_LIVE_SMTP_PORT: "2025"
+      TEST_LIVE_API: http://127.0.0.1:9025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma client
+        run: npx prisma generate
+
+      - name: Wait for Mailpit
+        run: |
+          for url in http://127.0.0.1:8025/livez http://127.0.0.1:9025/livez; do
+            for i in $(seq 1 30); do curl -fsS "$url" >/dev/null && break; sleep 1; done
+          done
+
+      - name: Integration tests (full flow, admin auth, RBAC, SSO mock, Resend stub, exports…)
+        run: npx vitest run --project integration

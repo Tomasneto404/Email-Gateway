@@ -1,10 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # One image for api + worker (different commands). Separate `migrate` target keeps the
 # Prisma CLI (and dev deps) out of the runtime image.
-# Build runners can use a restrictive umask, and COPY keeps the checkout's file modes. Files the
-# non-root `node` user reads are made world-readable in the layer that creates them (a later
-# recursive chmod would duplicate them into a new layer). CI checks this as `node`:
-# scripts/check-runtime-image.mjs.
 ARG NODE_IMAGE=node:22-alpine
 
 # ---- all deps (build tooling) ----
@@ -22,13 +18,13 @@ COPY tsconfig.json tsconfig.build.json prisma.config.ts ./
 COPY prisma ./prisma
 COPY src ./src
 COPY scripts/copy-docs-assets.mjs ./scripts/copy-docs-assets.mjs
-RUN npm run build && chmod -R a+rX dist
+RUN npm run build
 
 # ---- build admin UI (static assets served by the API at /ui) ----
 FROM deps AS ui-build
 COPY openapi.json ./
 COPY ui ./ui
-RUN npm run gen:api -w ui && npm run build -w ui && chmod -R a+rX ui/dist
+RUN npm run gen:api -w ui && npm run build -w ui
 
 # ---- production deps only ----
 FROM ${NODE_IMAGE} AS prod-deps
@@ -49,9 +45,8 @@ FROM ${NODE_IMAGE} AS migrate
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
-COPY --chmod=644 package.json prisma.config.ts ./
+COPY package.json prisma.config.ts ./
 COPY prisma ./prisma
-RUN chmod -R a+rX prisma
 USER node
 CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
 
@@ -63,7 +58,7 @@ ENV NODE_ENV=production \
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=ui-build /app/ui/dist ./ui/dist
-COPY --chmod=644 package.json ./
+COPY package.json ./
 USER node
 EXPOSE 3000 9464
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \

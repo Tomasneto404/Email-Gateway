@@ -1,0 +1,95 @@
+# End-to-end (Playwright) — GitHub Actions version.
+#
+# Differences from .forgejo/workflows/e2e.yml: services via mapped ports on localhost, and
+# actions/upload-artifact@v4 (v3 is shut down on GitHub; Forgejo's act_runner keeps v3).
+name: E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: e2e-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: mailgw
+          POSTGRES_PASSWORD: mailgw
+          POSTGRES_DB: mailgw_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mailgw -d mailgw_e2e"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+      mailpit:
+        image: axllent/mailpit:v1.33.1
+        ports: ["1025:1025", "8025:8025"]
+    # NOTE: no NODE_ENV=production at job level — `npm ci` would then skip devDependencies
+    # (@types/*, typescript, vite, playwright) and the build fails. It is set only for the app processes.
+    env:
+      LOG_LEVEL: warn
+      DATABASE_URL: postgresql://mailgw:mailgw@127.0.0.1:5432/mailgw_e2e
+      REDIS_URL: redis://127.0.0.1:6379
+      MAILPIT_SMTP_HOST: 127.0.0.1
+      MAILPIT_SMTP_PORT: "1025"
+      PORT: "3000"
+      COOKIE_SECURE: "false"
+      APP_ENCRYPTION_KEY: ZTJlLWNpLW9ubHktbm90LWEtcmVhbC1zZWNyZXQtMDA=  # 32 bytes, CI-only test value
+      METRICS_PORT: "9464"
+      MG_BASE_URL: http://127.0.0.1:3000
+      MG_CLI: node dist/cli.js
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build backend + UI
+        run: |
+          npm run build
+          npm run build -w ui
+
+      - name: Migrate database
+        run: npx prisma migrate deploy
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E (api + worker + tests in one step)
+        run: |
+          NODE_ENV=production node dist/main.api.js > /tmp/api.log 2>&1 &
+          NODE_ENV=production METRICS_PORT=9465 node dist/main.worker.js > /tmp/worker.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/health/ready >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3000/health/ready
+          npx playwright test -c ui/playwright.config.ts
+
+      - name: Server logs
+        if: failure()
+        run: |
+          echo "----- api -----"; tail -n 200 /tmp/api.log || true
+          echo "----- worker -----"; tail -n 200 /tmp/worker.log || true
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: ui/test-results
+          retention-days: 7
