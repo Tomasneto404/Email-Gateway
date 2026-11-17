@@ -2631,6 +2631,20 @@
             }
           },
           {
+            "description": "Activity performed on this API key",
+            "in": "query",
+            "name": "keyId",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "description": "Activity performed by this admin user",
+            "in": "query",
+            "name": "actorId",
+            "required": false,
+            "schema": {}
+          },
+          {
             "in": "query",
             "name": "actorType",
             "required": false,
@@ -2705,7 +2719,105 @@
             "session": []
           }
         ],
-        "summary": "Admin activity log",
+        "summary": "Admin activity log (general, per user via actorId, per API key via keyId)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/audit/export.csv": {
+      "get": {
+        "operationId": "adminExportAudit",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "delimiter",
+            "required": false,
+            "schema": {
+              "enum": [
+                "comma",
+                "semicolon"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "enum": [
+                "success",
+                "failure"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyId",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "actorId",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "actorType",
+            "required": false,
+            "schema": {
+              "enum": [
+                "user",
+                "token",
+                "cli",
+                "system"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Export the activity log as CSV (same filters as the list: general, actorId, keyId, …).",
         "tags": [
           "admin"
         ]
@@ -3628,6 +3740,79 @@
           }
         ],
         "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/messages/export.csv": {
+      "get": {
+        "operationId": "adminExportMessages",
+        "parameters": [
+          {
+            "description": "semicolon for Excel in locales using a decimal comma",
+            "in": "query",
+            "name": "delimiter",
+            "required": false,
+            "schema": {
+              "enum": [
+                "comma",
+                "semicolon"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "subject",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "recipient",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "keyId",
+            "required": false,
+            "schema": {}
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Export messages as CSV (same filters as the list; e.g. keyId for one API key). Metadata only, never bodies.",
         "tags": [
           "admin"
         ]

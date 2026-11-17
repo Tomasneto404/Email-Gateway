@@ -113,7 +113,7 @@ const routes = [
   createRoute({
     getParentRoute: () => appRoute,
     path: 'activity',
-    validateSearch: pick({ action: 'string', actor: 'string', actorType: 'string', outcome: 'string', page: 'number' }),
+    validateSearch: pick({ action: 'string', actor: 'string', actorType: 'string', outcome: 'string', actorId: 'string', keyId: 'string', page: 'number' }),
     beforeLoad: requirePerm('audit:read'),
     component: ActivityPage,
   }),

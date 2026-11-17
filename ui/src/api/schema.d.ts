@@ -62,8 +62,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Admin activity log */
+        /** Admin activity log (general, per user via actorId, per API key via keyId) */
         get: operations["adminListAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/audit/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the activity log as CSV (same filters as the list: general, actorId, keyId, …). */
+        get: operations["adminExportAudit"];
         put?: never;
         post?: never;
         delete?: never;
@@ -401,6 +418,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["adminBulkApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/messages/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export messages as CSV (same filters as the list; e.g. keyId for one API key). Metadata only, never bodies. */
+        get: operations["adminExportMessages"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1481,6 +1515,10 @@ export interface operations {
                 to?: unknown;
                 from?: unknown;
                 outcome?: "success" | "failure";
+                /** @description Activity performed on this API key */
+                keyId?: unknown;
+                /** @description Activity performed by this admin user */
+                actorId?: unknown;
                 actorType?: "user" | "token" | "cli" | "system";
                 actor?: unknown;
                 action?: unknown;
@@ -1501,6 +1539,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuditListDto"];
                 };
+            };
+        };
+    };
+    adminExportAudit: {
+        parameters: {
+            query?: {
+                delimiter?: "comma" | "semicolon";
+                to?: unknown;
+                from?: unknown;
+                outcome?: "success" | "failure";
+                keyId?: unknown;
+                actorId?: unknown;
+                actorType?: "user" | "token" | "cli" | "system";
+                actor?: unknown;
+                action?: unknown;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2023,6 +2088,32 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BulkResultDto"];
                 };
+            };
+        };
+    };
+    adminExportMessages: {
+        parameters: {
+            query?: {
+                /** @description semicolon for Excel in locales using a decimal comma */
+                delimiter?: "comma" | "semicolon";
+                to?: unknown;
+                from?: unknown;
+                subject?: unknown;
+                recipient?: unknown;
+                keyId?: unknown;
+                status?: unknown;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

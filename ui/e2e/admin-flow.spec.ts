@@ -92,7 +92,8 @@ test('create key → send test email → visible in Messages', async ({ page }) 
   const shown = page.getByTestId('api-key-secret');
   await expect(shown).toContainText('mk_sbx_');
   apiKey = (await shown.textContent())!.trim();
-  await page.getByRole('button', { name: "I've stored the key" }).click();
+  await page.getByRole('checkbox', { name: 'I have stored this key securely' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
 
   // Key detail → test send
   await expect(page.getByRole('heading', { name: new RegExp(KEY) })).toBeVisible();

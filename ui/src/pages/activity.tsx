@@ -1,5 +1,8 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { useAudit, type AuditParams } from '@/api/queries';
+import { useAudit, useKeyLookup, useUsersLookup, type AuditParams } from '@/api/queries';
+import { ExportMenu } from '@/components/common/export-menu';
+import { useMe } from '@/lib/auth';
+import { X } from 'lucide-react';
 import type { Schemas } from '@/api/client';
 import { Pill } from '@/components/common/badges';
 import { PageHeader } from '@/components/common/page';
@@ -37,8 +40,24 @@ const cols: Column<Entry>[] = [
   { id: 'ip', header: 'IP', cell: (a) => <span className="text-muted-foreground font-mono text-xs">{a.ip ?? '—'}</span> },
 ];
 
+function ScopeChip({ label, value, onClear }: { label: string; value: string; onClear: () => void }) {
+  return (
+    <span data-testid="scope-chip" className="bg-primary/10 text-primary inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium">
+      {label}: {value}
+      <button type="button" aria-label={`Clear ${label} filter`} onClick={onClear} className="hover:text-foreground">
+        <X className="size-3.5" />
+      </button>
+    </span>
+  );
+}
+
 export function ActivityPage() {
   const search = useSearch({ strict: false }) as AuditParams;
+  const { can } = useMe();
+  const users = useUsersLookup(!!search.actorId && can('users:read'));
+  const key = useKeyLookup(search.keyId, can('keys:read'));
+  const userLabel = users.data?.items.find((u) => u.id === search.actorId)?.email;
+  const keyLabel = key.data?.name;
   const navigate = useNavigate();
   const q: AuditParams = { page: 1, pageSize: 50, order: 'desc', ...search };
   const { data, isLoading } = useAudit(q);
@@ -46,7 +65,16 @@ export function ActivityPage() {
   const sel = 'border-input h-8 rounded-md border bg-transparent px-2 text-sm';
   return (
     <>
-      <PageHeader title="Activity log" description="Every administrative action and sign-in attempt." />
+      <PageHeader
+        title="Activity log"
+        description="Every administrative action and sign-in attempt."
+        actions={
+          <ExportMenu
+            path="/admin/audit/export.csv"
+            params={{ action: search.action, actor: search.actor, actorType: search.actorType, outcome: search.outcome, actorId: search.actorId, keyId: search.keyId }}
+          />
+        }
+      />
       <div className="flex flex-wrap items-center gap-2 border-b px-6 py-2">
         <select aria-label="Action" className={sel} value={search.action ?? ''} onChange={(e) => set({ action: e.target.value || undefined })}>
           <option value="">All actions</option>
@@ -68,6 +96,8 @@ export function ActivityPage() {
           <option value="failure">failure</option>
         </select>
         <Input placeholder="Actor contains…" className="h-8 w-52" defaultValue={search.actor} onChange={(e) => set({ actor: e.target.value || undefined })} />
+        {search.actorId && <ScopeChip label="User" value={userLabel ?? search.actorId.slice(0, 8)} onClear={() => set({ actorId: undefined })} />}
+        {search.keyId && <ScopeChip label="API key" value={keyLabel ?? search.keyId.slice(0, 8)} onClear={() => set({ keyId: undefined })} />}
       </div>
       <DataTable
         columns={cols}

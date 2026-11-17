@@ -3,6 +3,7 @@ import { MailCheck, MoreHorizontal, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { useDeleteUser, useInviteUser, useResetAccess, useResetTotp, useRoles, useUpdateUser, useUsers, type User } from '@/api/queries';
 import { Pill } from '@/components/common/badges';
+import { exportUrl } from '@/components/common/export-menu';
 import { CopyButton, Field, PageHeader } from '@/components/common/page';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
 import { DataTable, type Column } from '@/components/data-table/data-table';
@@ -178,6 +179,7 @@ export function UsersPage() {
   const [editRoles, setEditRoles] = useState<User | null>(null);
   const [link, setLink] = useState<(InviteResult & { email: string }) | null>(null);
   const manage = can('users:manage');
+  const audit = can('audit:read');
 
   const cols: Column<User>[] = [
     {
@@ -217,9 +219,9 @@ export function UsersPage() {
       header: '',
       className: 'text-right pr-6',
       cell: (u) =>
-        u.id === me?.id ? (
+        u.id === me?.id && !audit ? (
           <span className="text-muted-foreground text-xs">you</span>
-        ) : manage ? (
+        ) : manage || audit ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="icon" variant="ghost" className="size-7" aria-label={`Actions for ${u.email}`}>
@@ -227,6 +229,28 @@ export function UsersPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {audit && (
+                <>
+                  <DropdownMenuItem asChild>
+                    <Link to="/activity" search={{ actorId: u.id }}>
+                      View activity
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <a href={exportUrl('/admin/audit/export.csv', { actorId: u.id })} download data-testid={`export-user-activity-${u.email}`}>
+                      Export activity (CSV)
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <a href={exportUrl('/admin/audit/export.csv', { actorId: u.id }, 'semicolon')} download>
+                      Export activity — Excel (semicolon)
+                    </a>
+                  </DropdownMenuItem>
+                  {manage && u.id !== me?.id && <DropdownMenuSeparator />}
+                </>
+              )}
+              {manage && u.id !== me?.id && (
+                <>
               {u.authSource === 'local' ? (
                 <>
                   <DropdownMenuItem onClick={() => setEditRoles(u)}>Edit roles…</DropdownMenuItem>
@@ -245,6 +269,8 @@ export function UsersPage() {
               <DropdownMenuItem variant="destructive" onClick={() => setConfirm({ kind: 'delete', user: u })}>
                 Delete…
               </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         ) : null,

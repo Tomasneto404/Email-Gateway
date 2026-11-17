@@ -14,6 +14,7 @@ import {
   AdminUsersController,
 } from './admin/admin.controllers';
 import { StatsService } from './admin/stats.service';
+import { ExportService } from './admin/export.service';
 import { AccountController, AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { AuthentikService } from './auth/authentik.service';
@@ -50,6 +51,7 @@ export const API_PROVIDERS = [
   AdminMessagesService,
   GatewayExceptionFilter,
   StatsService,
+  ExportService,
   SecretBox,
   SessionsService,
   UsersService,

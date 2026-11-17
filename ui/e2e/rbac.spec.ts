@@ -46,7 +46,8 @@ test('Operator sees only what its role allows', async ({ page }) => {
   await page.getByLabel('Add allowed recipient').fill('@example.com');
   await page.getByLabel('Add allowed recipient').press('Enter');
   await page.getByRole('button', { name: 'Create key' }).click();
-  await page.getByRole('button', { name: "I've stored the key" }).click();
+  await page.getByRole('checkbox', { name: 'I have stored this key securely' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('radio', { name: 'Live' })).toBeDisabled();
   await expect(page.getByText(/do not allow promoting/)).toBeVisible();
 });

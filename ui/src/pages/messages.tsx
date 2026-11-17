@@ -3,6 +3,7 @@ import { Check, X } from 'lucide-react';
 import { useState } from 'react';
 import { useApprove, useKeys, useMessages, useReject, type Message, type MessageListParams } from '@/api/queries';
 import { ModeBadge, OutcomeBadge, Pill, STATUS_LABEL, StatusBadge } from '@/components/common/badges';
+import { ExportMenu } from '@/components/common/export-menu';
 import { PageHeader } from '@/components/common/page';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
 import { DataTable, type Column } from '@/components/data-table/data-table';
@@ -60,7 +61,16 @@ export function MessagesPage() {
 
   return (
     <>
-      <PageHeader title="Messages" description="Every request after authentication: accepted or rejected." />
+      <PageHeader
+        title="Messages"
+        description="Every request after authentication: accepted or rejected."
+        actions={
+          <ExportMenu
+            path="/admin/messages/export.csv"
+            params={{ status: filters.status, keyId: filters.keyId, recipient: filters.recipient, subject: filters.subject, from: filters.from, to: filters.to }}
+          />
+        }
+      />
       <div className="flex flex-wrap items-center gap-2 border-b px-6 py-2">
         <Input placeholder="Subject contains…" className="h-8 w-52" defaultValue={filters.subject} onChange={(e) => set({ subject: e.target.value || undefined })} />
         <Input placeholder="Recipient (exact)" className="h-8 w-52" defaultValue={filters.recipient} onBlur={(e) => set({ recipient: e.target.value.trim() || undefined })} />
