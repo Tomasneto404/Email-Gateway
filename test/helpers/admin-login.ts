@@ -17,9 +17,11 @@ export interface LoggedIn {
   h: Record<string, string>;
 }
 
-export async function createUser(s: Stack, role: 'admin' | 'viewer', canViewBodies = false) {
-  const email = `${uname(role)}@admins.test`;
-  const u = await s.api.get(UsersService).createLocal({ email, role, canViewBodies, password: PASSWORD }, CLI_ACTOR);
+/** 'admin' → Admin; 'viewer' → Viewer (+ Body reader when canViewBodies); or explicit role names. */
+export async function createUser(s: Stack, role: 'admin' | 'viewer' | string[], canViewBodies = false) {
+  const roles = Array.isArray(role) ? role : role === 'admin' ? ['Admin'] : ['Viewer', ...(canViewBodies ? ['Body reader'] : [])];
+  const email = `${uname(Array.isArray(role) ? 'rbac' : role)}@admins.test`;
+  const u = await s.api.get(UsersService).createLocal({ email, roles, password: PASSWORD }, CLI_ACTOR);
   return { email, id: u.id };
 }
 
@@ -32,12 +34,15 @@ export async function nextCode(s: Stack, userId: string): Promise<string> {
   return totp(secret, target * 30_000);
 }
 
-export async function login(s: Stack, role: 'admin' | 'viewer', canViewBodies = false): Promise<LoggedIn> {
+export async function login(s: Stack, role: 'admin' | 'viewer' | string[], canViewBodies = false): Promise<LoggedIn> {
   const { email, id } = await createUser(s, role, canViewBodies);
   const agent = request.agent(s.baseUrl);
   const origin = { Origin: s.baseUrl };
   const l = await agent.post('/admin/auth/login').set(origin).send({ email, password: PASSWORD });
   if (l.status !== 200) throw new Error(`login ${l.status} ${JSON.stringify(l.body)}`);
+  if (l.body.next === 'done') {
+    return { agent, csrf: l.body.csrfToken, email, userId: id, h: { Origin: s.baseUrl, 'X-CSRF-Token': l.body.csrfToken } };
+  }
   if (l.body.next === 'totp_enroll') await agent.post('/admin/auth/totp/enroll').set(origin).send({});
   const v = await agent.post('/admin/auth/totp/verify').set(origin).send({ code: await nextCode(s, id) });
   if (v.status !== 200) throw new Error(`verify ${v.status} ${JSON.stringify(v.body)}`);

@@ -12,6 +12,8 @@ import { GatewayStateService } from './gateway-state/gateway-state.service';
 import { KeysService, toPolicyView } from './keys/keys.service';
 import { QuotaService } from './policy/quota.service';
 import { SessionsService } from './auth/sessions.service';
+import { RolesService } from './auth/roles.service';
+import { SystemMailService } from './auth/system-mail.service';
 import { UsersService } from './auth/users.service';
 import { createInterface } from 'node:readline';
 import { Writable } from 'node:stream';
@@ -22,7 +24,7 @@ class CliModule {
     return {
       module: CliModule,
       imports: [CoreModule.forRoot(opts)],
-      providers: [KeysService, QuotaService, AdminMessagesService, SessionsService, UsersService],
+      providers: [KeysService, QuotaService, AdminMessagesService, SessionsService, UsersService, RolesService, SystemMailService],
     };
   }
 }
@@ -50,9 +52,11 @@ Gateway
   gateway:resume
 
 Admin users (UI)
-  users:create      --email <e> [--name <n>] [--role admin|viewer] [--bodies] [--password-stdin]
-                    (prompts for the password unless --password-stdin; TOTP is enrolled at first login)
+  users:create      --email <e> [--name <n>] [--role <Role> ...] [--password-stdin]
+                    (roles by name, repeatable; default Admin. See roles:list)
+                    (prompts for the password unless --password-stdin; 2FA is optional unless TOTP_REQUIRED=true)
   users:list
+  roles:list
   users:reset-2fa   --email <e>
   users:reset-access --email <e>   (clears password + TOTP, prints a new invite link)
   users:disable     --email <e>
@@ -82,8 +86,7 @@ const OPTIONS = {
   reason: { type: 'string' },
   id: { type: 'string' },
   email: { type: 'string' },
-  role: { type: 'string' },
-  bodies: { type: 'boolean' },
+  role: { type: 'string', multiple: true },
   'password-stdin': { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 } as const;
@@ -224,16 +227,21 @@ async function main() {
         break;
       case 'users:create': {
         const users = app.get(UsersService);
-        const role = (o.role ?? 'admin') as 'admin' | 'viewer';
         const password = await readPassword(!!o['password-stdin']);
-        const u = await users.createLocal({ email: need(o.email, 'email'), name: o.name, role, canViewBodies: !!o.bodies, password }, CLI_ACTOR);
+        const roles = (o.role ?? []).flatMap((r) => r.split(',')).map((r) => r.trim()).filter(Boolean);
+        const u = await users.createLocal({ email: need(o.email, 'email'), name: o.name, roles, password }, CLI_ACTOR);
         out(u);
-        process.stdout.write('\nUser created. Log in at /ui/ — you will be asked to set up TOTP on first login.\n');
+        process.stdout.write('\nUser created. Sign in at /ui/. Two-factor authentication can be enabled from the account menu (mandatory if TOTP_REQUIRED=true).\n');
         break;
       }
       case 'users:list': {
         const { items } = await app.get(UsersService).list();
-        console.table(items.map((u) => ({ email: u.email, role: u.role, source: u.authSource, totp: u.totpEnrolled, disabled: u.disabled, lastLogin: u.lastLoginAt ?? '-' })));
+        console.table(items.map((u) => ({ email: u.email, roles: u.roles.map((r) => r.name).join(', '), source: u.authSource, totp: u.totpEnrolled, disabled: u.disabled, lastLogin: u.lastLoginAt ?? '-' })));
+        break;
+      }
+      case 'roles:list': {
+        const { items } = await app.get(RolesService).list();
+        console.table(items.map((r) => ({ name: r.name, builtin: r.builtin, users: r.userCount, permissions: r.permissions.join(' '), authentikGroups: r.ssoGroups.join(', ') })));
         break;
       }
       case 'users:reset-2fa': {
@@ -246,7 +254,7 @@ async function main() {
         const users = app.get(UsersService);
         const u = await users.getByEmail(need(o.email, 'email'));
         const r = await users.resetAccess(u.id, CLI_ACTOR);
-        process.stdout.write(`Invite link (valid ${r.expiresInHours}h, shown once): <PUBLIC_URL>${r.invitePath}\n`);
+        process.stdout.write(`${r.emailed ? `Invite emailed to ${u.email}. ` : ''}Invite link (valid ${r.expiresInHours}h, shown once): <PUBLIC_URL>${r.invitePath}\n`);
         break;
       }
       case 'users:disable':

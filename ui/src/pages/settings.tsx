@@ -33,6 +33,16 @@ export function SettingsPage() {
                   ['SMTP auth', s.smtp.authConfigured ? 'configured (password hidden)' : 'none'],
                   ['Resend', onOff(s.resend.enabled)],
                   ['Resend webhook', onOff(s.resend.webhookConfigured)],
+                  [
+                    'System email (invites)',
+                    s.systemMail.enabled ? (
+                      <span className="text-xs">
+                        <Pill color="green">enabled</Pill> {s.systemMail.from} via {s.systemMail.provider}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">off: set SYSTEM_MAIL_FROM</span>
+                    ),
+                  ],
                 ]}
               />
             </CardContent>
@@ -89,13 +99,15 @@ export function SettingsPage() {
                   ['Audit records', `${s.recordRetentionDays} days`],
                   ['Retention job', <span className="font-mono text-xs">{s.retentionCron} (UTC)</span>],
                   ['Local login', onOff(s.localLogin)],
+                  ['Two-factor (TOTP)', s.totpRequired ? <Pill color="green">required</Pill> : <Pill>optional</Pill>],
                   ['Static admin token', onOff(s.adminTokenEnabled)],
                   ['Session', `${s.sessionTtlHours} h max · ${s.sessionIdleMinutes} min idle`],
                   ['Authentik SSO', onOff(s.authentik.enabled)],
                   ...(s.authentik.enabled
                     ? ([
                         ['Issuer', <span className="font-mono text-xs">{s.authentik.issuer}</span>],
-                        ['Groups', <span className="text-xs">admin: {s.authentik.adminGroup} · viewer: {s.authentik.viewerGroup} · bodies: {s.authentik.bodiesGroup}</span>],
+                        ['Groups claim', <span className="font-mono text-xs">{s.authentik.groupsClaim}</span>],
+                        ['Group → role mapping', <span className="text-xs">configured per role on the Roles page</span>],
                       ] as Array<[string, React.ReactNode]>)
                     : []),
                 ]}

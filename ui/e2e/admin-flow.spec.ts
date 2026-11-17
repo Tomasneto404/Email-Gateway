@@ -47,16 +47,31 @@ async function nextCode(): Promise<string> {
   return totp(secret, step * 30_000);
 }
 
-test('first login: password → TOTP enrollment → dashboard', async ({ page }) => {
+test('password-only login, then the user opts in to 2FA from the account menu', async ({ page }) => {
+  // 2FA is optional by default: the first login goes straight to the dashboard.
   await signIn(page);
-  await expect(page.getByRole('heading', { name: 'Set up two-factor authentication' })).toBeVisible();
-  await expect(page.getByAltText('TOTP QR code')).toBeVisible();
-  secret = (await page.getByTestId('totp-secret').textContent())!.trim();
-  await page.getByLabel('Authentication code').fill(await nextCode());
-  await page.getByRole('button', { name: 'Verify' }).click();
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   await expect(page.getByTestId('current-user')).toHaveText(EMAIL);
   await expect(page.getByTestId('gateway-state')).toHaveText('Gateway running');
+
+  // Enable TOTP: account menu → Two-factor authentication
+  await page.getByTestId('current-user').click();
+  await page.getByRole('menuitem', { name: /Two-factor authentication/ }).click();
+  await page.getByRole('button', { name: 'Set up authenticator' }).click();
+  await expect(page.getByAltText('TOTP QR code')).toBeVisible();
+  secret = (await page.getByTestId('account-totp-secret').textContent())!.trim();
+  await page.getByLabel('Code from the app').fill(await nextCode());
+  await page.getByRole('button', { name: 'Enable two-factor' }).click();
+  await expect(page.getByText('Two-factor authentication enabled')).toBeVisible();
+
+  // From now on the code is required at sign-in.
+  await page.getByTestId('current-user').click();
+  await page.getByRole('menuitem', { name: 'Log out' }).click();
+  await signIn(page);
+  await expect(page.getByRole('heading', { name: 'Two-factor authentication' })).toBeVisible();
+  await page.getByLabel('Authentication code').fill(await nextCode());
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 });
 
 test('create key → send test email → visible in Messages', async ({ page }) => {

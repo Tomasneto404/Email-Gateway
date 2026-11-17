@@ -8,6 +8,7 @@ import { CircuitBreakerService } from './worker/circuit-breaker';
 import { DeliveryWorker } from './worker/delivery.worker';
 import { ProvidersRegistry } from './worker/providers.registry';
 import { RetentionService } from './worker/retention.service';
+import { SystemMailWorker } from './worker/system-mail.worker';
 
 /** Keeps the BullMQ queue's paused flag consistent with the authoritative DB state on startup. */
 @Injectable()
@@ -34,6 +35,7 @@ export class WorkerModule {
         ProvidersRegistry,
         CircuitBreakerService,
         DeliveryWorker,
+        SystemMailWorker,
         ...(opts.retention === false ? [] : [RetentionService]),
         ...(opts.opsServer === false ? [] : [OpsServer, WorkerGauges]),
       ],

@@ -59,6 +59,8 @@ export const configSchema = z.object({
   SESSION_TTL_HOURS: int(12, 1),
   SESSION_IDLE_MINUTES: int(30, 1),
   LOCAL_LOGIN_ENABLED: bool(true),
+  /** false (default): TOTP is optional; each local user may enable it. true: mandatory for every local user. */
+  TOTP_REQUIRED: bool(false),
   LOGIN_MAX_FAILURES: int(5, 1),
   LOGIN_LOCKOUT_MINUTES: int(15, 1),
   LOGIN_IP_MAX: int(30, 1),
@@ -72,9 +74,6 @@ export const configSchema = z.object({
   AUTHENTIK_CLIENT_SECRET: optStr,
   AUTHENTIK_SCOPES: z.string().default('openid profile email'),
   AUTHENTIK_GROUPS_CLAIM: z.string().default('groups'),
-  AUTHENTIK_ADMIN_GROUP: z.string().default('mail-gateway-admins'),
-  AUTHENTIK_VIEWER_GROUP: z.string().default('mail-gateway-viewers'),
-  AUTHENTIK_BODIES_GROUP: z.string().default('mail-gateway-body-viewers'),
   /** Allow http issuers (tests/dev only). */
   AUTHENTIK_ALLOW_INSECURE: bool(false),
 
@@ -118,6 +117,10 @@ export const configSchema = z.object({
   RESEND_BASE_URL: optStr,
   RESEND_WEBHOOK_SECRET: optStr,
 
+  /** Sender of system emails (admin invites). Unset = invites are shown as a link only. */
+  SYSTEM_MAIL_FROM: optStr,
+  SYSTEM_MAIL_FROM_NAME: z.string().default('mail-gateway'),
+
   MAILPIT_SMTP_HOST: z.string().default('mailpit'),
   MAILPIT_SMTP_PORT: int(1025, 1),
   MAILPIT_UI_URL: optStr,
@@ -155,6 +158,9 @@ export function buildConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       if (!cfg[k]) problems.push(`${k}: required when AUTHENTIK_ENABLED=true`);
     }
   }
+  if (cfg.SYSTEM_MAIL_FROM && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(cfg.SYSTEM_MAIL_FROM)) {
+    problems.push('SYSTEM_MAIL_FROM: must be a plain email address');
+  }
   if (problems.length) throw new Error(`Invalid configuration:\n${problems.map((p) => `  - ${p}`).join('\n')}`);
   return { ...cfg, smtpEnabled: !!cfg.SMTP_HOST };
 }
@@ -166,6 +172,14 @@ export function parseTrustProxy(v: string): boolean | number | string[] {
   if (t === 'true') return true;
   if (/^\d+$/.test(t)) return Number(t);
   return t.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/** System emails need a sender address and an enabled live provider (SMTP or Resend). */
+export function systemMailProvider(cfg: AppConfig): 'smtp' | 'resend' | null {
+  if (!cfg.SYSTEM_MAIL_FROM) return null;
+  const enabled = liveProvidersEnabled(cfg);
+  if (enabled.includes(cfg.LIVE_PROVIDER)) return cfg.LIVE_PROVIDER;
+  return enabled[0] ?? null;
 }
 
 export function liveProvidersEnabled(cfg: AppConfig): Array<'smtp' | 'resend'> {

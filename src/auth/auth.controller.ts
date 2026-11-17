@@ -1,8 +1,8 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, Res } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { ApiCookieAuth, ApiOkResponse, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AdminAuditService } from '../admin/admin-audit.service';
-import { sameOrigin } from '../admin/admin-auth.guard';
+import { AdminAuthGuard, AdminRequest, Authenticated, sameOrigin } from '../admin/admin-auth.guard';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { GatewayError } from '../common/errors';
 import { clientIp } from '../common/http';
@@ -27,9 +27,16 @@ class PasswordBody {
 class AuthConfigDto {
   @ApiProperty() localLogin!: boolean;
   @ApiProperty() authentik!: boolean;
+  @ApiProperty({ description: 'true when every local user must use TOTP' }) totpRequired!: boolean;
 }
 class LoginResultDto {
-  @ApiProperty({ enum: ['totp_enroll', 'totp_verify'] }) next!: 'totp_enroll' | 'totp_verify';
+  @ApiProperty({
+    enum: ['done', 'totp_enroll', 'totp_verify'],
+    description: 'done: signed in (no 2FA for this user). totp_verify: enter the TOTP code. totp_enroll: 2FA is mandatory and must be set up now.',
+  })
+  next!: 'done' | 'totp_enroll' | 'totp_verify';
+  @ApiPropertyOptional({ type: () => UserDto, description: 'Present when next=done' }) user?: UserDto;
+  @ApiPropertyOptional({ description: 'Present when next=done' }) csrfToken?: string;
 }
 class TotpEnrollDto {
   @ApiProperty() secret!: string;
@@ -79,16 +86,23 @@ export class AuthController {
   @ApiOperation({ operationId: 'authConfig' })
   @ApiOkResponse({ type: AuthConfigDto })
   config(): AuthConfigDto {
-    return { localLogin: this.cfg.LOCAL_LOGIN_ENABLED, authentik: this.cfg.AUTHENTIK_ENABLED };
+    return { localLogin: this.cfg.LOCAL_LOGIN_ENABLED, authentik: this.cfg.AUTHENTIK_ENABLED, totpRequired: this.cfg.TOTP_REQUIRED };
   }
 
   @Post('login')
   @HttpCode(200)
-  @ApiOperation({ operationId: 'authLogin', summary: 'Step 1: email + password. Sets a short-lived pre-MFA session cookie.' })
+  @ApiOperation({
+    operationId: 'authLogin',
+    summary: 'Email + password. Signs in directly (next=done) or sets a short-lived pre-MFA session when a TOTP code is needed.',
+  })
   @ApiOkResponse({ type: LoginResultDto })
   async login(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: LoginBody): Promise<LoginResultDto> {
     this.requireOrigin(req);
     const r = await this.auth.login(body?.email, body?.password, meta(req));
+    if (r.next === 'done') {
+      this.sessions.setCookie(res, r.token, true);
+      return { next: 'done', user: toUserView(await this.users.getFull(r.user.id)), csrfToken: r.session.csrfToken };
+    }
     this.sessions.setCookie(res, r.token, false);
     return { next: r.next };
   }
@@ -112,8 +126,7 @@ export class AuthController {
     const { session, user } = await this.partial(req);
     const full = await this.auth.verify(session, user, body?.code, meta(req));
     this.sessions.setCookie(res, full.token, true);
-    const fresh = await this.users.get(user.id);
-    return { user: toUserView(fresh), csrfToken: full.session.csrfToken };
+    return { user: toUserView(await this.users.getFull(user.id)), csrfToken: full.session.csrfToken };
   }
 
   @Get('session')
@@ -192,3 +205,47 @@ export class AuthController {
   }
 }
 export { OkDto };
+
+/** Self-service account security for the signed-in user (any role). */
+@ApiTags('auth')
+@ApiCookieAuth('session')
+@UseGuards(AdminAuthGuard)
+@Authenticated()
+@Controller('admin/account')
+export class AccountController {
+  constructor(
+    private readonly auth: AuthService,
+    private readonly users: UsersService,
+  ) {}
+
+  private async me(req: AdminRequest) {
+    if (req.actor.type !== 'user' || !req.actor.id) throw new GatewayError('FORBIDDEN', 'Only signed-in users have an account.');
+    return this.users.get(req.actor.id);
+  }
+
+  @Post('totp/setup')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'accountTotpSetup', summary: 'Start enabling 2FA: returns a new TOTP secret + QR code (inactive until confirmed).' })
+  @ApiOkResponse({ type: TotpEnrollDto })
+  async setup(@Req() req: AdminRequest): Promise<TotpEnrollDto> {
+    return this.auth.accountTotpSetup(await this.me(req));
+  }
+
+  @Post('totp/confirm')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'accountTotpConfirm', summary: 'Confirm with a code from the app; 2FA is then required at every login.' })
+  @ApiOkResponse({ type: UserDto })
+  async confirm(@Req() req: AdminRequest, @Body() body: CodeBody) {
+    const u = await this.auth.accountTotpConfirm(await this.me(req), body?.code, meta(req));
+    return toUserView(await this.users.getFull(u.id));
+  }
+
+  @Post('totp/disable')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'accountTotpDisable', summary: 'Disable 2FA (requires the current password). Refused when TOTP_REQUIRED=true.' })
+  @ApiOkResponse({ type: UserDto })
+  async disable(@Req() req: AdminRequest, @Body() body: PasswordBody) {
+    const u = await this.auth.accountTotpDisable(await this.me(req), body?.password, meta(req));
+    return toUserView(await this.users.getFull(u.id));
+  }
+}

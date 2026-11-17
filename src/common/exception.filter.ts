@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import type { Logger } from 'pino';
 import { ROOT_LOGGER } from './logger';
 import { ErrorCode, GatewayError } from './errors';
+import { safeLogPath } from './http';
 
 const statusToCode: Record<number, ErrorCode> = {
   400: 'VALIDATION_FAILED',
@@ -25,7 +26,7 @@ export class GatewayExceptionFilter implements ExceptionFilter {
     if (res.headersSent) return;
     const { status, body } = toErrorResponse(exception);
     if (status >= 500 && !(exception instanceof GatewayError)) {
-      this.logger.error({ err: exception, url: req.originalUrl, method: req.method }, 'unhandled error');
+      this.logger.error({ err: exception, path: safeLogPath(req.originalUrl), method: req.method }, 'unhandled error');
     }
     const retryAfter = (body.error.details as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds;
     if (retryAfter) res.setHeader('Retry-After', String(retryAfter));

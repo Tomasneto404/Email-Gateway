@@ -29,7 +29,7 @@ const policy: KeyPolicy = {
   updatedAt: '2026-11-16T10:00:00Z',
 };
 
-function setup(over: Partial<KeyPolicy> = {}, props: { readOnly?: boolean } = {}) {
+function setup(over: Partial<KeyPolicy> = {}, props: { readOnly?: boolean; canUpdate?: boolean; canPromote?: boolean } = {}) {
   const onSave = vi.fn().mockResolvedValue(undefined);
   const user = userEvent.setup();
   render(<PolicyEditor policy={{ ...policy, ...over }} onSave={onSave} {...props} />);
@@ -113,6 +113,26 @@ describe('PolicyEditor', () => {
     expect(screen.getByLabelText('Add allowed recipient')).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Save policy' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Remove/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('PolicyEditor RBAC', () => {
+  it('without keys:promote the Live and Approval modes are disabled', () => {
+    setup({}, { canPromote: false });
+    expect(screen.getByRole('radio', { name: 'Live' })).toBeDisabled();
+    expect(screen.getByRole('radio', { name: 'Approval' })).toBeDisabled();
+    expect(screen.getByLabelText('From address')).toBeEnabled();
+    expect(screen.getByText(/do not allow promoting/)).toBeInTheDocument();
+  });
+
+  it('with only keys:promote, just the mode can change', async () => {
+    const { user, onSave } = setup({}, { canUpdate: false, canPromote: true });
+    expect(screen.getByLabelText('From address')).toBeDisabled();
+    expect(screen.getByLabelText('Quota per hour')).toBeDisabled();
+    expect(screen.getByLabelText('Add allowed recipient')).toBeDisabled();
+    await user.click(screen.getByRole('radio', { name: 'Approval' }));
+    await user.click(screen.getByRole('button', { name: 'Save policy' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ mode: 'approval' }));
   });
 });
 

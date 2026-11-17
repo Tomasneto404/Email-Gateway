@@ -51,7 +51,7 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
 export function KeysPage() {
   const search = useSearch({ strict: false }) as KeyListParams;
   const navigate = useNavigate();
-  const { isAdmin } = useMe();
+  const { can } = useMe();
   const q: KeyListParams = { page: 1, pageSize: 50, sort: 'name', order: 'asc', ...search };
   const { data, isLoading } = useKeys(q);
   const set = (patch: Partial<KeyListParams>) => navigate({ to: '/keys', search: { ...search, page: 1, ...patch } as never });
@@ -78,7 +78,7 @@ export function KeysPage() {
 
   return (
     <>
-      <PageHeader title="API keys" description="Each key carries its own sending policy." actions={isAdmin && <CreateKeyWizard />} />
+      <PageHeader title="API keys" description="Each key carries its own sending policy." actions={can('keys:create') && <CreateKeyWizard />} />
       <div className="flex flex-wrap items-center gap-2 border-b px-6 py-2">
         <Input placeholder="Filter by name…" className="h-8 w-56" defaultValue={search.q} onChange={(e) => set({ q: e.target.value || undefined })} />
         <Segmented
@@ -107,7 +107,7 @@ export function KeysPage() {
         order={q.order}
         onSort={(sort, order) => set({ sort: sort as KeyListParams['sort'], order })}
         onRowClick={(k) => navigate({ to: '/keys/$keyId', params: { keyId: k.id } })}
-        empty={{ title: 'No API keys yet', description: isAdmin ? 'Create the first key with "New key". It starts in sandbox mode.' : undefined }}
+        empty={{ title: 'No API keys yet', description: can('keys:create') ? 'Create the first key with "New key". It starts in sandbox mode.' : undefined }}
       />
     </>
   );
@@ -116,7 +116,7 @@ export function KeysPage() {
 export function KeyDetailPage() {
   const { keyId } = useParams({ strict: false }) as { keyId: string };
   const navigate = useNavigate();
-  const { isAdmin } = useMe();
+  const { can, canAny } = useMe();
   const { data: k, isLoading, error } = useKey(keyId);
   const settings = useSettings();
   const update = useUpdateKey(keyId);
@@ -159,8 +159,8 @@ export function KeyDetailPage() {
         }
         actions={
           <>
-            <TestSendDialog policy={k} disabled={!isAdmin || !k.enabled} />
-            {isAdmin && (
+            {can('keys:test_send') && <TestSendDialog policy={k} disabled={!k.enabled} />}
+            {canAny('keys:rotate', 'keys:disable', 'keys:delete') && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="icon" variant="outline" className="size-8" aria-label="Key actions">
@@ -168,22 +168,29 @@ export function KeyDetailPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setDialog('rotate')}>
-                    <RotateCw className="size-4" /> Rotate secret…
-                  </DropdownMenuItem>
-                  {k.enabled ? (
-                    <DropdownMenuItem onClick={() => setDialog('disable')}>
-                      <Power className="size-4" /> Disable (kill switch)…
-                    </DropdownMenuItem>
-                  ) : (
-                    <DropdownMenuItem onClick={() => setEnabled.mutate(true)}>
-                      <Power className="size-4" /> Enable
+                  {can('keys:rotate') && (
+                    <DropdownMenuItem onClick={() => setDialog('rotate')}>
+                      <RotateCw className="size-4" /> Rotate secret…
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onClick={() => setDialog('delete')}>
-                    <Trash2 className="size-4" /> Delete…
-                  </DropdownMenuItem>
+                  {can('keys:disable') &&
+                    (k.enabled ? (
+                      <DropdownMenuItem onClick={() => setDialog('disable')}>
+                        <Power className="size-4" /> Disable (kill switch)…
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => setEnabled.mutate(true)}>
+                        <Power className="size-4" /> Enable
+                      </DropdownMenuItem>
+                    ))}
+                  {can('keys:delete') && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onClick={() => setDialog('delete')}>
+                        <Trash2 className="size-4" /> Delete…
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -198,7 +205,9 @@ export function KeyDetailPage() {
           <CardContent>
             <PolicyEditor
               policy={k}
-              readOnly={!isAdmin}
+              readOnly={!can('keys:update') && !can('keys:promote')}
+              canUpdate={can('keys:update')}
+              canPromote={can('keys:promote')}
               providers={settings.data ? { smtp: settings.data.smtp.enabled, resend: settings.data.resend.enabled } : undefined}
               onSave={(patch) => update.mutateAsync(patch)}
             />

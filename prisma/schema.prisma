@@ -204,18 +204,11 @@ model AdminAudit {
   @@map("admin_audit")
 }
 
-enum AdminRole {
-  admin
-  viewer
-}
-
 /// Human administrators (local password + mandatory TOTP, or Authentik SSO).
 model AdminUser {
   id            String    @id @default(uuid(7)) @db.Uuid
   email         String    @unique
   name          String    @default("")
-  role          AdminRole @default(viewer)
-  canViewBodies Boolean   @default(false) @map("can_view_bodies")
   /// argon2id; null for SSO-only users and pending invites
   passwordHash  String?   @map("password_hash")
   /// AES-256-GCM(APP_ENCRYPTION_KEY) of the base32 TOTP secret
@@ -235,6 +228,7 @@ model AdminUser {
 
   sessions AdminSession[]
   invites  AdminInvite[]
+  roles    AdminUserRole[]
 
   @@map("admin_users")
 }
@@ -271,4 +265,35 @@ model AdminInvite {
 
   @@index([userId])
   @@map("admin_invites")
+}
+
+/// RBAC role: a named set of permissions. Users can hold several roles (union of permissions).
+model Role {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  name        String   @unique
+  description String   @default("")
+  /// permission ids (see src/auth/permissions.ts); "*" = everything
+  permissions String[] @default([])
+  /// Authentik group names that grant this role on SSO login
+  ssoGroups   String[] @default([]) @map("sso_groups")
+  /// built-in roles cannot be deleted or renamed; "Admin" cannot be edited
+  builtin     Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  users AdminUserRole[]
+
+  @@map("roles")
+}
+
+model AdminUserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("admin_user_roles")
 }

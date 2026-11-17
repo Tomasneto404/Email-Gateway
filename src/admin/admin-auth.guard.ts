@@ -8,13 +8,21 @@ import { GatewayError } from '../common/errors';
 import { bearerToken, clientIp } from '../common/http';
 import { AuthLimiterService } from '../keys/auth-limiter.service';
 import { safeEqual } from '../keys/key-format';
+import { hasPermission } from '../auth/permissions';
 import { Actor } from './admin-audit.service';
 
 export type AdminRequest = Request & { actor: Actor; sessionIdHash?: string };
 
-export const ROLE_KEY = 'mg:role';
-/** Minimum role for a route. Default for /admin routes without the decorator: 'admin'. */
-export const RequireRole = (role: 'admin' | 'viewer') => SetMetadata(ROLE_KEY, role);
+export const PERM_KEY = 'mg:perm';
+/**
+ * RBAC: the caller needs ANY of the listed permissions. Routes without this decorator require "*".
+ * `Authenticated()` (empty list) only requires a valid admin identity.
+ */
+export const RequirePermission = (...perms: string[]) => SetMetadata(PERM_KEY, perms);
+export const Authenticated = () => SetMetadata(PERM_KEY, []);
+
+/** Does the authenticated actor hold a permission? */
+export const can = (actor: Actor | undefined, perm: string) => !!actor?.permissions && hasPermission(actor.permissions, perm);
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -38,7 +46,7 @@ export function sameOrigin(req: Request, cfg: AppConfig): boolean {
  * Admin authentication:
  *  1. Session cookie (humans; MFA completed). Mutations require X-CSRF-Token + same Origin.
  *  2. Static admin token (automation/CLI), only if ADMIN_TOKEN_ENABLED.
- * Roles: admin (everything) / viewer (read-only, bodies hidden unless canViewBodies).
+ * Authorization: RBAC permissions (union of the user's roles); the static token has "*".
  */
 @Injectable()
 export class AdminAuthGuard implements CanActivate {
@@ -65,9 +73,9 @@ export class AdminAuthGuard implements CanActivate {
       }
       throw new GatewayError('UNAUTHORIZED', 'Admin authentication required.');
     }
-    const needed = this.reflector.getAllAndOverride<'admin' | 'viewer' | undefined>(ROLE_KEY, [ctx.getHandler(), ctx.getClass()]) ?? 'admin';
-    if (needed === 'admin' && actor.role !== 'admin') {
-      throw new GatewayError('FORBIDDEN', 'This action requires the admin role.');
+    const needed = this.reflector.getAllAndOverride<string[] | undefined>(PERM_KEY, [ctx.getHandler(), ctx.getClass()]) ?? ['*'];
+    if (needed.length && !needed.some((p) => can(actor, p))) {
+      throw new GatewayError('FORBIDDEN', `Missing permission: ${needed.join(' or ')}.`, { required: needed });
     }
     req.actor = actor;
     return true;
@@ -87,20 +95,13 @@ export class AdminAuthGuard implements CanActivate {
       }
     }
     req.sessionIdHash = r.session.idHash;
-    return {
-      type: 'user',
-      id: r.user.id,
-      label: r.user.email,
-      ip,
-      role: r.user.role,
-      canViewBodies: r.user.role === 'admin' || r.user.canViewBodies,
-    };
+    return { type: 'user', id: r.user.id, label: r.user.email, ip, permissions: r.permissions };
   }
 
   private fromToken(req: Request, ip: string): Actor | null {
     const token = bearerToken(req);
     if (token && this.cfg.ADMIN_TOKEN_ENABLED && this.cfg.ADMIN_TOKEN && safeEqual(token, this.cfg.ADMIN_TOKEN)) {
-      return { type: 'token', label: 'admin-token', ip, role: 'admin', canViewBodies: true };
+      return { type: 'token', label: 'admin-token', ip, permissions: ['*'] };
     }
     return null;
   }

@@ -20,6 +20,9 @@ export type GatewayEvent =
   | 'message_approved'
   | 'message_rejected_by_admin'
   | 'retention_completed'
+  | 'system_mail_queued'
+  | 'system_mail_sent'
+  | 'system_mail_failed'
   | 'admin_action'
   | 'login_succeeded'
   | 'login_failed';

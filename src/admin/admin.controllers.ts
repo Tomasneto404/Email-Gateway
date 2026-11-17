@@ -14,8 +14,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { RolesService } from '../auth/roles.service';
 import { UsersService } from '../auth/users.service';
-import { APP_CONFIG, AppConfig } from '../config/config';
+import { APP_CONFIG, AppConfig, systemMailProvider } from '../config/config';
 import { GatewayError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { Prisma } from '../generated/prisma/client';
@@ -26,11 +27,12 @@ import { QuotaService } from '../policy/quota.service';
 import { SendAcceptedDto } from '../send/send.dto';
 import { SendService } from '../send/send.service';
 import { AdminAuditService } from './admin-audit.service';
-import { AdminAuthGuard, AdminRequest, RequireRole } from './admin-auth.guard';
+import { AdminAuthGuard, AdminRequest, RequirePermission, can } from './admin-auth.guard';
 import { AdminMessagesService, STATUSES } from './admin-messages.service';
 import {
   AuditListDto,
   BulkResultDto,
+  CreateRoleDto,
   GatewayStateDto,
   InviteLinkDto,
   InviteResultDto,
@@ -42,10 +44,14 @@ import {
   MessageActionDto,
   MessageDetailDto,
   MessageListDto,
+  PermissionDto,
+  RoleDto,
+  RoleListDto,
   SettingsDto,
   StatsOverviewDto,
   SystemStateDto,
   TestSendDto,
+  UpdateRoleDto,
   UpdateUserDto,
   UserDto,
   UserListDto,
@@ -87,7 +93,7 @@ export class AdminKeysController {
   ) {}
 
   @Get()
-  @RequireRole('viewer')
+  @RequirePermission('keys:read')
   @ApiOperation({ operationId: 'adminListKeys', summary: 'List API keys with current hour/day usage' })
   @Paged()
   @ApiQuery({ name: 'q', required: false })
@@ -110,15 +116,23 @@ export class AdminKeysController {
   }
 
   @Post()
+  @RequirePermission('keys:create')
   @ApiOperation({ operationId: 'adminCreateKey', summary: 'Create an API key. The secret is returned ONCE.' })
   @ApiBody({ type: CreateKeyDto })
   @ApiCreatedResponse({ type: KeyCreatedDto })
   create(@Req() req: AdminRequest, @Body() body: unknown) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    // Creating a key directly in live/approval mode is equivalent to promoting it.
+    if ((b.mode === 'live' || b.mode === 'approval') && !can(req.actor, 'keys:promote')) {
+      throw new GatewayError('FORBIDDEN', `Missing permission keys:promote to create a key in ${String(b.mode)} mode. Create it in sandbox mode instead.`, {
+        required: ['keys:promote'],
+      });
+    }
     return this.keys.create(body, req.actor);
   }
 
   @Get(':id')
-  @RequireRole('viewer')
+  @RequirePermission('keys:read')
   @ApiOperation({ operationId: 'adminGetKey' })
   @ApiOkResponse({ type: KeyWithUsageDto })
   async get(@Param('id') id: string) {
@@ -128,15 +142,30 @@ export class AdminKeysController {
   }
 
   @Patch(':id')
+  @RequirePermission('keys:update', 'keys:promote', 'keys:disable')
   @ApiOperation({ operationId: 'adminUpdateKey', summary: 'Update policy fields (mode, recipients, quotas, ...). Takes effect immediately.' })
   @ApiBody({ type: UpdateKeyDto })
   @ApiOkResponse({ type: KeyDto })
-  update(@Req() req: AdminRequest, @Param('id') id: string, @Body() body: unknown) {
+  async update(@Req() req: AdminRequest, @Param('id') id: string, @Body() body: unknown) {
+    const b = (body ?? {}) as Record<string, unknown>;
+    const current = await this.keys.getActive(id);
+    const need = (perm: string, what: string) => {
+      if (!can(req.actor, perm)) throw new GatewayError('FORBIDDEN', `Missing permission ${perm} to ${what}.`, { required: [perm] });
+    };
+    if (b.mode !== undefined && b.mode !== current.mode) {
+      // leaving sandbox (to live or approval) can send real mail: separate permission
+      if (b.mode === 'live' || b.mode === 'approval') need('keys:promote', `change the mode to ${String(b.mode)}`);
+      else need('keys:update', 'change the mode');
+    }
+    if (b.enabled !== undefined && b.enabled !== current.enabled) need('keys:disable', 'enable or disable the key');
+    const other = Object.keys(b).filter((k) => k !== 'mode' && k !== 'enabled');
+    if (other.length) need('keys:update', `change ${other.join(', ')}`);
     return this.keys.update(id, body, req.actor);
   }
 
   @Post(':id/rotate')
   @HttpCode(200)
+  @RequirePermission('keys:rotate')
   @ApiOperation({ operationId: 'adminRotateKey', summary: 'Rotate the secret. The old secret stops working immediately; the new one is returned ONCE.' })
   @ApiOkResponse({ type: KeyCreatedDto })
   rotate(@Req() req: AdminRequest, @Param('id') id: string) {
@@ -145,6 +174,7 @@ export class AdminKeysController {
 
   @Post(':id/enable')
   @HttpCode(200)
+  @RequirePermission('keys:disable')
   @ApiOperation({ operationId: 'adminEnableKey' })
   @ApiOkResponse({ type: KeyDto })
   enable(@Req() req: AdminRequest, @Param('id') id: string) {
@@ -153,6 +183,7 @@ export class AdminKeysController {
 
   @Post(':id/disable')
   @HttpCode(200)
+  @RequirePermission('keys:disable')
   @ApiOperation({ operationId: 'adminDisableKey', summary: 'Kill switch for one key.' })
   @ApiOkResponse({ type: KeyDto })
   disable(@Req() req: AdminRequest, @Param('id') id: string) {
@@ -161,6 +192,7 @@ export class AdminKeysController {
 
   @Delete(':id')
   @HttpCode(204)
+  @RequirePermission('keys:delete')
   @ApiOperation({ operationId: 'adminDeleteKey' })
   async remove(@Req() req: AdminRequest, @Param('id') id: string) {
     await this.keys.remove(id, req.actor);
@@ -168,6 +200,7 @@ export class AdminKeysController {
 
   @Post(':id/test-send')
   @HttpCode(202)
+  @RequirePermission('keys:test_send')
   @ApiOperation({ operationId: 'adminTestSend', summary: 'Send a test email through the normal pipeline using this key (policy fully enforced).' })
   @ApiBody({ type: TestSendDto })
   @ApiAcceptedResponse({ type: SendAcceptedDto })
@@ -232,7 +265,7 @@ export class AdminMessagesController {
   constructor(private readonly messages: AdminMessagesService) {}
 
   @Get()
-  @RequireRole('viewer')
+  @RequirePermission('messages:read')
   @ApiOperation({ operationId: 'adminListMessages', summary: 'Search messages (status, key, recipient, subject, date range)' })
   @Paged()
   @ApiQuery({ name: 'status', required: false, description: `Comma list of ${STATUSES.join(', ')}` })
@@ -259,20 +292,19 @@ export class AdminMessagesController {
   }
 
   @Get(':id')
-  @RequireRole('viewer')
+  @RequirePermission('messages:read')
   @ApiOperation({ operationId: 'adminGetMessage', summary: 'Message detail. Bodies are null for viewers without canViewBodies.' })
   @ApiOkResponse({ type: MessageDetailDto })
   get(@Req() req: AdminRequest, @Param('id') id: string) {
-    return this.messages.get(id, { includeBodies: !!req.actor.canViewBodies });
+    return this.messages.get(id, { includeBodies: can(req.actor, 'messages:bodies') });
   }
 
   @Get(':id/preview')
-  @RequireRole('viewer')
+  @RequirePermission('messages:bodies')
   @ApiOperation({ operationId: 'adminPreviewMessage', summary: 'HTML body for a sandboxed iframe (strict CSP; remote images blocked unless remoteImages=1).' })
   @ApiQuery({ name: 'remoteImages', required: false, enum: ['0', '1'] })
   @ApiProduces('text/html')
   async preview(@Req() req: AdminRequest, @Param('id') id: string, @Query('remoteImages') remote: string | undefined, @Res() res: Response) {
-    if (!req.actor.canViewBodies) throw new GatewayError('FORBIDDEN', 'You are not allowed to view message bodies.');
     const html = await this.messages.htmlBody(id);
     res.setHeader('Content-Security-Policy', previewCsp(remote === '1'));
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -283,6 +315,7 @@ export class AdminMessagesController {
 
   @Post('approve')
   @HttpCode(200)
+  @RequirePermission('approvals:decide')
   @ApiOperation({ operationId: 'adminBulkApprove' })
   @ApiOkResponse({ type: BulkResultDto })
   bulkApprove(@Req() req: AdminRequest, @Body() body: BulkBody) {
@@ -291,6 +324,7 @@ export class AdminMessagesController {
 
   @Post('reject')
   @HttpCode(200)
+  @RequirePermission('approvals:decide')
   @ApiOperation({ operationId: 'adminBulkReject' })
   @ApiOkResponse({ type: BulkResultDto })
   bulkReject(@Req() req: AdminRequest, @Body() body: BulkBody) {
@@ -299,6 +333,7 @@ export class AdminMessagesController {
 
   @Post(':id/approve')
   @HttpCode(200)
+  @RequirePermission('approvals:decide')
   @ApiOperation({ operationId: 'adminApproveMessage' })
   @ApiOkResponse({ type: MessageActionDto })
   approve(@Req() req: AdminRequest, @Param('id') id: string) {
@@ -307,6 +342,7 @@ export class AdminMessagesController {
 
   @Post(':id/reject')
   @HttpCode(200)
+  @RequirePermission('approvals:decide')
   @ApiOperation({ operationId: 'adminRejectMessage' })
   @ApiOkResponse({ type: MessageActionDto })
   reject(@Req() req: AdminRequest, @Param('id') id: string, @Body() body: RejectBody) {
@@ -325,7 +361,7 @@ export class AdminGatewayController {
   constructor(private readonly gateway: GatewayStateService) {}
 
   @Get()
-  @RequireRole('viewer')
+  @RequirePermission('dashboard:read')
   @ApiOperation({ operationId: 'adminGatewayState' })
   @ApiOkResponse({ type: GatewayStateDto })
   state() {
@@ -334,6 +370,7 @@ export class AdminGatewayController {
 
   @Post('pause')
   @HttpCode(200)
+  @RequirePermission('gateway:pause')
   @ApiOperation({ operationId: 'adminPauseGateway', summary: 'Stop accepting and delivering mail.' })
   @ApiOkResponse({ type: GatewayStateDto })
   pause(@Req() req: AdminRequest, @Body() body: PauseBody) {
@@ -342,6 +379,7 @@ export class AdminGatewayController {
 
   @Post('resume')
   @HttpCode(200)
+  @RequirePermission('gateway:pause')
   @ApiOperation({ operationId: 'adminResumeGateway', summary: 'Resume and reset circuit breakers.' })
   @ApiOkResponse({ type: GatewayStateDto })
   resume(@Req() req: AdminRequest) {
@@ -354,7 +392,7 @@ export class AdminStatsController {
   constructor(private readonly stats: StatsService) {}
 
   @Get('overview')
-  @RequireRole('viewer')
+  @RequirePermission('dashboard:read', 'keys:read')
   @ApiOperation({ operationId: 'adminStatsOverview', summary: 'Time series + breakdowns from the hourly roll-up' })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
@@ -366,7 +404,7 @@ export class AdminStatsController {
   }
 
   @Get('system')
-  @RequireRole('viewer')
+  @RequirePermission('dashboard:read')
   @ApiOperation({ operationId: 'adminSystemState', summary: 'Gateway state, breakers, queue depth, pending approvals, SMTP health' })
   @ApiOkResponse({ type: SystemStateDto })
   system() {
@@ -380,6 +418,7 @@ export class AdminUsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
+  @RequirePermission('users:read')
   @ApiOperation({ operationId: 'adminListUsers' })
   @ApiOkResponse({ type: UserListDto })
   list() {
@@ -387,14 +426,16 @@ export class AdminUsersController {
   }
 
   @Post()
+  @RequirePermission('users:manage')
   @ApiOperation({ operationId: 'adminInviteUser', summary: 'Create a local user and return a one-time invite link (shown once).' })
   @ApiBody({ type: InviteUserDto })
   @ApiCreatedResponse({ type: InviteResultDto })
   invite(@Req() req: AdminRequest, @Body() body: Record<string, unknown>) {
-    return this.users.invite(body ?? {}, req.actor);
+    return this.users.invite(body ?? {}, req.actor, req.headers.origin);
   }
 
   @Patch(':id')
+  @RequirePermission('users:manage')
   @ApiOperation({ operationId: 'adminUpdateUser', summary: 'Change role/body access, enable/disable.' })
   @ApiBody({ type: UpdateUserDto })
   @ApiOkResponse({ type: UserDto })
@@ -404,6 +445,7 @@ export class AdminUsersController {
 
   @Post(':id/reset-2fa')
   @HttpCode(200)
+  @RequirePermission('users:manage')
   @ApiOperation({ operationId: 'adminResetUserTotp', summary: 'Force TOTP re-enrollment at next login (signs the user out).' })
   @ApiOkResponse({ type: UserDto })
   resetTotp(@Req() req: AdminRequest, @Param('id') id: string) {
@@ -412,17 +454,67 @@ export class AdminUsersController {
 
   @Post(':id/reset-access')
   @HttpCode(200)
+  @RequirePermission('users:manage')
   @ApiOperation({ operationId: 'adminResetUserAccess', summary: 'Clear password + TOTP and issue a new invite link.' })
   @ApiOkResponse({ type: InviteLinkDto })
   resetAccess(@Req() req: AdminRequest, @Param('id') id: string) {
-    return this.users.resetAccess(id, req.actor);
+    return this.users.resetAccess(id, req.actor, req.headers.origin);
   }
 
   @Delete(':id')
   @HttpCode(204)
+  @RequirePermission('users:manage')
   @ApiOperation({ operationId: 'adminDeleteUser' })
   async remove(@Req() req: AdminRequest, @Param('id') id: string) {
     await this.users.remove(id, req.actor);
+  }
+}
+
+// ---------------------------------------------------------------- roles
+@AdminController('admin/roles')
+export class AdminRolesController {
+  constructor(private readonly roles: RolesService) {}
+
+  @Get()
+  @RequirePermission('users:read', 'roles:manage')
+  @ApiOperation({ operationId: 'adminListRoles' })
+  @ApiOkResponse({ type: RoleListDto })
+  list() {
+    return this.roles.list();
+  }
+
+  @Get('permissions')
+  @RequirePermission('users:read', 'roles:manage')
+  @ApiOperation({ operationId: 'adminListPermissions', summary: 'Permission catalog' })
+  @ApiOkResponse({ type: [PermissionDto] })
+  permissions() {
+    return this.roles.catalog();
+  }
+
+  @Post()
+  @RequirePermission('roles:manage')
+  @ApiOperation({ operationId: 'adminCreateRole', summary: 'Create a role. You can only grant permissions you hold.' })
+  @ApiBody({ type: CreateRoleDto })
+  @ApiCreatedResponse({ type: RoleDto })
+  create(@Req() req: AdminRequest, @Body() body: Record<string, unknown>) {
+    return this.roles.create(body, req.actor);
+  }
+
+  @Patch(':id')
+  @RequirePermission('roles:manage')
+  @ApiOperation({ operationId: 'adminUpdateRole', summary: 'Edit a role (not the built-in Admin). Changes apply immediately to every member.' })
+  @ApiBody({ type: UpdateRoleDto })
+  @ApiOkResponse({ type: RoleDto })
+  update(@Req() req: AdminRequest, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.roles.update(id, body, req.actor);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @RequirePermission('roles:manage')
+  @ApiOperation({ operationId: 'adminDeleteRole', summary: 'Delete a custom role (built-in roles cannot be deleted).' })
+  async remove(@Req() req: AdminRequest, @Param('id') id: string) {
+    await this.roles.remove(id, req.actor);
   }
 }
 
@@ -432,7 +524,7 @@ export class AdminAuditController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  @RequireRole('viewer')
+  @RequirePermission('audit:read')
   @ApiOperation({ operationId: 'adminListAudit', summary: 'Admin activity log' })
   @Paged()
   @ApiQuery({ name: 'action', required: false })
@@ -469,7 +561,7 @@ export class AdminSettingsController {
   constructor(@Inject(APP_CONFIG) private readonly cfg: AppConfig) {}
 
   @Get()
-  @RequireRole('viewer')
+  @RequirePermission('settings:read')
   @ApiOperation({ operationId: 'adminSettings', summary: 'Effective configuration (read-only, never secrets)' })
   @ApiOkResponse({ type: SettingsDto })
   get(): SettingsDto {
@@ -479,6 +571,7 @@ export class AdminSettingsController {
       smtp: { enabled: c.smtpEnabled, host: c.SMTP_HOST ?? null, port: c.SMTP_PORT, secure: c.SMTP_SECURE, requireTls: c.SMTP_REQUIRE_TLS, authConfigured: !!c.SMTP_USER },
       resend: { enabled: c.RESEND_ENABLED, webhookConfigured: !!c.RESEND_WEBHOOK_SECRET },
       mailpitSmtp: `${c.MAILPIT_SMTP_HOST}:${c.MAILPIT_SMTP_PORT}`,
+      systemMail: { enabled: systemMailProvider(c) !== null, from: c.SYSTEM_MAIL_FROM ?? null, provider: systemMailProvider(c) },
       mailpitUiUrl: c.MAILPIT_UI_URL ?? null,
       bodyRetentionDays: c.AUDIT_BODY_RETENTION_DAYS,
       recordRetentionDays: c.AUDIT_RECORD_RETENTION_DAYS,
@@ -495,17 +588,11 @@ export class AdminSettingsController {
       maxRequestBytes: c.MAX_REQUEST_BYTES,
       trustProxy: c.TRUST_PROXY,
       localLogin: c.LOCAL_LOGIN_ENABLED,
+      totpRequired: c.TOTP_REQUIRED,
       adminTokenEnabled: c.ADMIN_TOKEN_ENABLED && !!c.ADMIN_TOKEN,
       sessionTtlHours: c.SESSION_TTL_HOURS,
       sessionIdleMinutes: c.SESSION_IDLE_MINUTES,
-      authentik: {
-        enabled: c.AUTHENTIK_ENABLED,
-        issuer: c.AUTHENTIK_ISSUER ?? null,
-        adminGroup: c.AUTHENTIK_ADMIN_GROUP,
-        viewerGroup: c.AUTHENTIK_VIEWER_GROUP,
-        bodiesGroup: c.AUTHENTIK_BODIES_GROUP,
-        scopes: c.AUTHENTIK_SCOPES,
-      },
+      authentik: { enabled: c.AUTHENTIK_ENABLED, issuer: c.AUTHENTIK_ISSUER ?? null, scopes: c.AUTHENTIK_SCOPES, groupsClaim: c.AUTHENTIK_GROUPS_CLAIM },
     };
   }
 }

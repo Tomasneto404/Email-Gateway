@@ -76,13 +76,17 @@ function ToggleCard({ title, description, children }: { title: string; descripti
 interface Props {
   policy: KeyPolicy;
   readOnly?: boolean;
+  /** keys:update — edit everything except leaving sandbox (default true) */
+  canUpdate?: boolean;
+  /** keys:promote — switch mode to live/approval (default true) */
+  canPromote?: boolean;
   onSave: (patch: UpdateKey) => Promise<unknown>;
   providers?: { smtp: boolean; resend: boolean };
 }
 
 const num = { setValueAs: (v: string) => (v === '' ? undefined : Number(v)) };
 
-export function PolicyEditor({ policy, readOnly, onSave, providers }: Props) {
+export function PolicyEditor({ policy, readOnly, onSave, providers, canUpdate = true, canPromote = true }: Props) {
   const initial = toForm(policy);
   const form = useForm<PolicyForm>({ resolver: zodResolver(policySchema), defaultValues: initial, mode: 'onBlur' });
   const { register, control, handleSubmit, watch, reset, formState } = form;
@@ -104,6 +108,11 @@ export function PolicyEditor({ policy, readOnly, onSave, providers }: Props) {
   return (
     <form onSubmit={submit} className="grid gap-8" aria-label="Policy editor">
       <fieldset disabled={readOnly} className="grid gap-8">
+        {!readOnly && (!canUpdate || !canPromote) && (
+          <p className="text-muted-foreground -mb-4 text-xs">
+            {!canUpdate ? 'Your roles only allow changing the delivery mode.' : 'Your roles do not allow promoting this key out of sandbox (keys:promote).'}
+          </p>
+        )}
         <Section title="Delivery">
           <Field label="Mode" hint={MODE_HINT[mode]}>
             <Controller
@@ -116,9 +125,9 @@ export function PolicyEditor({ policy, readOnly, onSave, providers }: Props) {
                   onChange={field.onChange}
                   disabled={readOnly}
                   options={[
-                    { value: 'sandbox', label: 'Sandbox' },
-                    { value: 'approval', label: 'Approval' },
-                    { value: 'live', label: 'Live' },
+                    { value: 'sandbox', label: 'Sandbox', disabled: !canUpdate },
+                    { value: 'approval', label: 'Approval', disabled: !canPromote },
+                    { value: 'live', label: 'Live', disabled: !canPromote },
                   ]}
                 />
               )}
@@ -133,7 +142,7 @@ export function PolicyEditor({ policy, readOnly, onSave, providers }: Props) {
                   label="Live provider"
                   value={field.value}
                   onChange={field.onChange}
-                  disabled={readOnly}
+                  disabled={readOnly || !canUpdate}
                   options={[
                     { value: 'default', label: 'Default' },
                     { value: 'smtp', label: `SMTP${providers && !providers.smtp ? ' (off)' : ''}` },
@@ -154,6 +163,7 @@ export function PolicyEditor({ policy, readOnly, onSave, providers }: Props) {
           )}
         </Section>
 
+        <fieldset disabled={readOnly || !canUpdate} className="contents">
         <Section title="Sender">
           <Field label="From address" htmlFor="fromAddress" error={e.fromAddress?.message} hint="Fixed; clients cannot override it.">
             <Input id="fromAddress" {...register('fromAddress')} aria-invalid={!!e.fromAddress} />
@@ -172,7 +182,7 @@ export function PolicyEditor({ policy, readOnly, onSave, providers }: Props) {
           <Controller
             control={control}
             name="allowedRecipients"
-            render={({ field }) => <RecipientChipsInput id="allowedRecipients" value={field.value} onChange={field.onChange} disabled={readOnly} />}
+            render={({ field }) => <RecipientChipsInput id="allowedRecipients" value={field.value} onChange={field.onChange} disabled={readOnly || !canUpdate} />}
           />
           <p className="text-muted-foreground text-xs leading-4">Every to/cc/bcc address must match one entry. &quot;@example.com&quot; matches that exact domain only.</p>
         </Section>
@@ -209,6 +219,7 @@ export function PolicyEditor({ policy, readOnly, onSave, providers }: Props) {
             </Field>
           )}
         </Section>
+        </fieldset>
       </fieldset>
 
       {!readOnly && (

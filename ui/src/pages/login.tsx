@@ -53,6 +53,12 @@ export function LoginPage() {
   const login = () =>
     run(async () => {
       const r = await call(api.POST('/admin/auth/login', { body: { email, password } }));
+      if (r.next === 'done' && r.user && r.csrfToken) {
+        setCsrfToken(r.csrfToken);
+        qc.setQueryData(['session'], { user: r.user, csrfToken: r.csrfToken });
+        navigate({ to: '/' });
+        return;
+      }
       if (r.next === 'totp_enroll') {
         const data = await call(api.POST('/admin/auth/totp/enroll'));
         setStep({ kind: 'enroll', data });
@@ -115,7 +121,11 @@ export function LoginPage() {
   return (
     <AuthCard
       title={step.kind === 'enroll' ? 'Set up two-factor authentication' : 'Two-factor authentication'}
-      subtitle={step.kind === 'enroll' ? 'Scan the QR code with an authenticator app (1Password, Authy, Google Authenticator…), then enter the 6-digit code.' : 'Enter the 6-digit code from your authenticator app.'}
+      subtitle={
+        step.kind === 'enroll'
+          ? 'This gateway requires two-factor authentication. Scan the QR code with an authenticator app (1Password, Authy, Google Authenticator…), then enter the 6-digit code.'
+          : 'Enter the 6-digit code from your authenticator app.'
+      }
     >
       <form
         className="grid gap-4"
