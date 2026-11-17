@@ -4,8 +4,8 @@
 # (Forgejo and GitHub). Writes step outputs in the $GITHUB_OUTPUT format to stdout.
 #
 # Inputs (env):
-#   REGISTRY       vars.DOCKERHUB_URL         e.g. docker.io | harbor.example.com (scheme optional)
-#   REPOSITORY     vars.DOCKERHUB_REPOSITORY  e.g. infra/mail-gateway
+#   REGISTRY       vars.DOCKERHUB_URL         optional, default docker.io (scheme optional)
+#   REPOSITORY     vars.DOCKERHUB_REPOSITORY  e.g. tnetomos/mail-gateway
 #   INPUT_VERSION  workflow_dispatch input    bare semver, optional
 #   GITHUB_REF / GITHUB_SHA / GITHUB_SERVER_URL / GITHUB_REPOSITORY   (set by the runner)
 #
@@ -15,11 +15,10 @@
 # The migrations image gets the same tags with a "-migrate" suffix (same repository).
 set -euo pipefail
 
-reg="${REGISTRY:-}"
-if [ -z "$reg" ]; then echo "::error::Repository variable DOCKERHUB_URL is not set (e.g. docker.io)" >&2; exit 1; fi
+reg="${REGISTRY:-docker.io}"
 reg="${reg#https://}"; reg="${reg#http://}"; reg="${reg%/}"
 repo="${REPOSITORY:-}"
-if [ -z "$repo" ]; then echo "::error::Repository variable DOCKERHUB_REPOSITORY is not set (e.g. infra/mail-gateway)" >&2; exit 1; fi
+if [ -z "$repo" ]; then echo "::error::Repository variable DOCKERHUB_REPOSITORY is not set (e.g. tnetomos/mail-gateway)" >&2; exit 1; fi
 repo="${repo#/}"; repo="${repo%/}"
 image="$(printf '%s/%s' "$reg" "$repo" | tr '[:upper:]' '[:lower:]')"
 
@@ -48,6 +47,7 @@ source_url="${GITHUB_SERVER_URL:-}/${GITHUB_REPOSITORY:-}"
 echo "registry=$reg"
 echo "image=$image"
 echo "repository=$(printf '%s' "$repo" | tr '[:upper:]' '[:lower:]')"
+echo "username=$(printf '%s' "${repo%%/*}" | tr '[:upper:]' '[:lower:]')"
 echo "version=${version:-dev}"
 echo "runtime_tags<<__TAGS__"
 for t in "${tags[@]}"; do echo "$image:$t"; done

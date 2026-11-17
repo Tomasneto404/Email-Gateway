@@ -9,9 +9,11 @@
 #
 # Actions that receive the registry token are pinned to full commit SHAs (version in the comment).
 #
-# Repository VARIABLES: DOCKERHUB_URL, DOCKERHUB_REPOSITORY, DOCKERHUB_USERNAME,
+# Repository VARIABLES: DOCKERHUB_REPOSITORY (e.g. tnetomos/mail-gateway)
+#                       DOCKERHUB_URL (optional, default docker.io)
+#                       DOCKERHUB_USERNAME (optional, defaults to the user segment of DOCKERHUB_REPOSITORY)
 #                       DOCKERHUB_PLATFORMS (optional, default linux/amd64)
-# Repository SECRET:    DOCKERHUB_TOKEN (password or access token with push rights)
+# Repository SECRET:    DOCKERHUB_TOKEN (Docker Hub access token with push rights)
 name: Build & Push
 
 on:
@@ -56,7 +58,7 @@ jobs:
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ steps.meta.outputs.registry }}
-          username: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME || steps.meta.outputs.username }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Verify before publishing: build both targets locally (linux/amd64) and check them as the
