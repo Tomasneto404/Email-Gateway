@@ -30,9 +30,10 @@ jobs:
         image: redis:7-alpine
       mailpit:
         image: axllent/mailpit:v1.33.1
+    # NOTE: no NODE_ENV=production at job level — `npm ci` would then skip devDependencies
+    # (@types/*, typescript, vite, playwright) and the build fails. It is set only for the app processes.
     env:
       # app configuration (same variables as docker-compose / .env)
-      NODE_ENV: production
       LOG_LEVEL: warn
       DATABASE_URL: postgresql://mailgw:mailgw@postgres:5432/mailgw_e2e
       REDIS_URL: redis://redis:6379
@@ -69,8 +70,8 @@ jobs:
 
       - name: Run E2E (api + worker + tests in one step)
         run: |
-          node dist/main.api.js > /tmp/api.log 2>&1 &
-          METRICS_PORT=9465 node dist/main.worker.js > /tmp/worker.log 2>&1 &
+          NODE_ENV=production node dist/main.api.js > /tmp/api.log 2>&1 &
+          NODE_ENV=production METRICS_PORT=9465 node dist/main.worker.js > /tmp/worker.log 2>&1 &
           for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/health/ready >/dev/null && break; sleep 1; done
           curl -fsS http://127.0.0.1:3000/health/ready
           npx playwright test -c ui/playwright.config.ts
