@@ -1,7 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useParams } from '@tanstack/react-router';
 import { sessionQuery } from '@/api/queries';
-import { AppShell } from '@/components/layout/app-shell';
+import { EmptyState } from '@/components/common/page';
+import { AppShell, NAV } from '@/components/layout/app-shell';
+import { useMe } from '@/lib/auth';
+import { canAny } from '@/lib/permissions';
+import { RolesPage } from '@/pages/roles';
 import { ActivityPage } from '@/pages/activity';
 import { DashboardPage } from '@/pages/dashboard';
 import { KeyDetailPage, KeysPage } from '@/pages/keys';
@@ -24,6 +28,10 @@ function pick(allowed: Record<string, 'string' | 'number'>) {
     }
     return out;
   };
+}
+
+function NoAccess() {
+  return <EmptyState title="No access yet" description="Your account has no permissions. Ask an administrator to assign you a role." className="py-24" />;
 }
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({ component: Outlet });
@@ -58,35 +66,58 @@ const appRoute = createRoute({
   component: AppShell,
 });
 
-const adminOnly = async ({ context }: { context: { queryClient: QueryClient } }) => {
+/** Route guard: needs ANY of the permissions, otherwise back to the start page. */
+const requirePerm =
+  (...perms: string[]) =>
+  async ({ context }: { context: { queryClient: QueryClient } }) => {
+    const s = await context.queryClient.ensureQueryData(sessionQuery);
+    if (!canAny(s.user.permissions, perms)) throw redirect({ to: '/' });
+  };
+
+/** Start page: the dashboard, or the first screen the user's roles allow. */
+const startPage = async ({ context }: { context: { queryClient: QueryClient } }) => {
   const s = await context.queryClient.ensureQueryData(sessionQuery);
-  if (s.user.role !== 'admin') throw redirect({ to: '/' });
+  if (canAny(s.user.permissions, ['dashboard:read'])) return;
+  const first = NAV.find((n) => canAny(s.user.permissions, n.perms));
+  if (first) throw redirect({ to: first.to });
 };
 
 const routes = [
-  createRoute({ getParentRoute: () => appRoute, path: '/', component: DashboardPage }),
+  createRoute({
+    getParentRoute: () => appRoute,
+    path: '/',
+    beforeLoad: startPage,
+    component: function Start() {
+      const { can } = useMe();
+      return can('dashboard:read') ? <DashboardPage /> : <NoAccess />;
+    },
+  }),
   createRoute({
     getParentRoute: () => appRoute,
     path: 'keys',
     validateSearch: pick({ q: 'string', mode: 'string', page: 'number', sort: 'string', order: 'string' }),
+    beforeLoad: requirePerm('keys:read'),
     component: KeysPage,
   }),
-  createRoute({ getParentRoute: () => appRoute, path: 'keys/$keyId', component: KeyDetailPage }),
+  createRoute({ getParentRoute: () => appRoute, path: 'keys/$keyId', beforeLoad: requirePerm('keys:read'), component: KeyDetailPage }),
   createRoute({
     getParentRoute: () => appRoute,
     path: 'messages',
     validateSearch: pick({ status: 'string', keyId: 'string', recipient: 'string', subject: 'string', from: 'string', to: 'string', page: 'number', sort: 'string', order: 'string', id: 'string' }),
+    beforeLoad: requirePerm('messages:read'),
     component: MessagesPage,
   }),
-  createRoute({ getParentRoute: () => appRoute, path: 'approvals', validateSearch: pick({ id: 'string', page: 'number' }), component: ApprovalsPage }),
-  createRoute({ getParentRoute: () => appRoute, path: 'users', beforeLoad: adminOnly, component: UsersPage }),
+  createRoute({ getParentRoute: () => appRoute, path: 'approvals', validateSearch: pick({ id: 'string', page: 'number' }), beforeLoad: requirePerm('messages:read'), component: ApprovalsPage }),
+  createRoute({ getParentRoute: () => appRoute, path: 'users', beforeLoad: requirePerm('users:read'), component: UsersPage }),
+  createRoute({ getParentRoute: () => appRoute, path: 'roles', beforeLoad: requirePerm('users:read', 'roles:manage'), component: RolesPage }),
   createRoute({
     getParentRoute: () => appRoute,
     path: 'activity',
     validateSearch: pick({ action: 'string', actor: 'string', actorType: 'string', outcome: 'string', page: 'number' }),
+    beforeLoad: requirePerm('audit:read'),
     component: ActivityPage,
   }),
-  createRoute({ getParentRoute: () => appRoute, path: 'settings', component: SettingsPage }),
+  createRoute({ getParentRoute: () => appRoute, path: 'settings', beforeLoad: requirePerm('settings:read'), component: SettingsPage }),
 ];
 
 const routeTree = rootRoute.addChildren([loginRoute, inviteRoute, appRoute.addChildren(routes)]);

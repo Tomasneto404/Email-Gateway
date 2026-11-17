@@ -75,8 +75,62 @@ export class AuthService {
       await this.fail(user && user.authSource === 'local' ? user : null, normalized, 'bad_password', meta);
       throw new GatewayError('INVALID_CREDENTIALS', 'Invalid email or password.');
     }
-    const { token } = await this.sessions.create(user, { mfaPassed: false, ...meta });
-    return { token, next: user.totpEnrolled ? ('totp_verify' as const) : ('totp_enroll' as const) };
+    // Second factor: required when the user enabled TOTP, or for everyone when TOTP_REQUIRED=true.
+    if (user.totpEnrolled || this.cfg.TOTP_REQUIRED) {
+      const { token } = await this.sessions.create(user, { mfaPassed: false, ...meta });
+      return { token, next: user.totpEnrolled ? ('totp_verify' as const) : ('totp_enroll' as const) };
+    }
+    // Password-only login (TOTP optional and not enabled by this user). `mfaPassed` = fully authenticated.
+    const updated = await this.prisma.adminUser.update({
+      where: { id: user.id },
+      data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() },
+    });
+    const full = await this.sessions.create(updated, { mfaPassed: true, ...meta });
+    await this.audit.record({ type: 'user', id: user.id, label: user.email, ip: meta.ip }, { action: 'auth.login', targetType: 'admin_user', targetId: user.id, details: { method: 'password' } });
+    this.events.emit('login_succeeded', { outcome: 'success', user: user.email, method: 'password', ip: meta.ip });
+    return { token: full.token, next: 'done' as const, session: full.session, user: updated };
+  }
+
+  // ------------------------------------------------------------ self-service 2FA (signed-in users)
+
+  private assertLocal(user: AdminUser) {
+    if (user.authSource !== 'local') throw new GatewayError('INVALID_STATE', 'Two-factor authentication for SSO users is managed by Authentik.');
+  }
+
+  /** Starts enrollment: stores a new encrypted secret that becomes active only after confirm(). */
+  async accountTotpSetup(user: AdminUser) {
+    this.assertLocal(user);
+    if (user.totpEnrolled) throw new GatewayError('INVALID_STATE', 'Two-factor authentication is already enabled.');
+    const secret = generateTotpSecret();
+    await this.prisma.adminUser.update({ where: { id: user.id }, data: { totpSecretEnc: this.box.seal(secret), totpLastStep: null } });
+    const uri = otpauthUri(secret, user.email);
+    return { secret, otpauthUri: uri, qrDataUrl: await QRCode.toDataURL(uri, { margin: 1, width: 220 }) };
+  }
+
+  async accountTotpConfirm(user: AdminUser, code: unknown, meta: Meta) {
+    this.assertLocal(user);
+    if (user.totpEnrolled) throw new GatewayError('INVALID_STATE', 'Two-factor authentication is already enabled.');
+    if (!user.totpSecretEnc) throw new GatewayError('INVALID_STATE', 'Start the setup first.');
+    const step = typeof code === 'string' ? verifyTotp(this.box.open(user.totpSecretEnc), code.trim()) : null;
+    if (step === null) throw new GatewayError('INVALID_CREDENTIALS', 'Invalid authentication code. Check the time on your device and try again.');
+    const updated = await this.prisma.adminUser.update({ where: { id: user.id }, data: { totpEnrolled: true, totpLastStep: step } });
+    await this.audit.record({ type: 'user', id: user.id, label: user.email, ip: meta.ip }, { action: 'auth.totp_enrolled', targetType: 'admin_user', targetId: user.id });
+    return updated;
+  }
+
+  /** Turning 2FA off requires the current password (re-authentication). Refused when TOTP_REQUIRED. */
+  async accountTotpDisable(user: AdminUser, password: unknown, meta: Meta) {
+    this.assertLocal(user);
+    if (this.cfg.TOTP_REQUIRED) throw new GatewayError('INVALID_STATE', 'Two-factor authentication is required by the gateway policy and cannot be disabled.');
+    if (!user.totpEnrolled) throw new GatewayError('INVALID_STATE', 'Two-factor authentication is not enabled.');
+    this.assertNotLocked(user);
+    if (typeof password !== 'string' || !(await verifyPassword(user.passwordHash, password))) {
+      await this.fail(user, user.email, 'bad_password_totp_disable', meta);
+      throw new GatewayError('INVALID_CREDENTIALS', 'Current password is incorrect.');
+    }
+    const updated = await this.prisma.adminUser.update({ where: { id: user.id }, data: { totpEnrolled: false, totpSecretEnc: null, totpLastStep: null } });
+    await this.audit.record({ type: 'user', id: user.id, label: user.email, ip: meta.ip }, { action: 'auth.totp_disabled', targetType: 'admin_user', targetId: user.id });
+    return updated;
   }
 
   /** First login: generate a TOTP secret (stored encrypted, not active until verified). */

@@ -7,17 +7,20 @@ import {
   AdminAuditController,
   AdminGatewayController,
   AdminKeysController,
+  AdminRolesController,
   AdminMessagesController,
   AdminSettingsController,
   AdminStatsController,
   AdminUsersController,
 } from './admin/admin.controllers';
 import { StatsService } from './admin/stats.service';
-import { AuthController } from './auth/auth.controller';
+import { AccountController, AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { AuthentikService } from './auth/authentik.service';
 import { SecretBox } from './auth/crypto';
 import { SessionsService } from './auth/sessions.service';
+import { RolesService } from './auth/roles.service';
+import { SystemMailService } from './auth/system-mail.service';
 import { UsersService } from './auth/users.service';
 import { GatewayExceptionFilter } from './common/exception.filter';
 import { CoreModule, CoreOptions } from './core.module';
@@ -32,6 +35,7 @@ import { IdempotencyService } from './policy/idempotency.service';
 import { QuotaService } from './policy/quota.service';
 import { PublicController } from './public-api/public.controller';
 import { SendService } from './send/send.service';
+import { safeLogPath } from './common/http';
 import { ResendWebhookController } from './webhooks/resend-webhook.controller';
 
 export const API_PROVIDERS = [
@@ -49,6 +53,8 @@ export const API_PROVIDERS = [
   SecretBox,
   SessionsService,
   UsersService,
+  RolesService,
+  SystemMailService,
   AuthService,
   AuthentikService,
 ];
@@ -70,7 +76,7 @@ export class ApiModule {
               req: (req: { id: string; method: string; url: string; raw?: { ip?: string } }) => ({
                 id: req.id,
                 method: req.method,
-                path: String(req.url).split('?')[0],
+                path: safeLogPath(String(req.url)),
                 ip: req.raw?.ip,
               }),
               res: (res: { statusCode: number }) => ({ statusCode: res.statusCode }),
@@ -81,11 +87,13 @@ export class ApiModule {
       controllers: [
         PublicController,
         AuthController,
+        AccountController,
         AdminKeysController,
         AdminMessagesController,
         AdminGatewayController,
         AdminStatsController,
         AdminUsersController,
+        AdminRolesController,
         AdminAuditController,
         AdminSettingsController,
         ResendWebhookController,

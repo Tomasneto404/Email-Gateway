@@ -16,7 +16,7 @@ import { fmtAgo, fmtNum } from '@/lib/format';
 const RANGES = { '24h': { hours: 24, bucket: 'hour' }, '7d': { hours: 168, bucket: 'day' }, '30d': { hours: 720, bucket: 'day' } } as const;
 
 export function DashboardPage() {
-  const { isAdmin } = useMe();
+  const { can } = useMe();
   const [range, setRange] = useState<keyof typeof RANGES>('24h');
   const r = RANGES[range];
   const [from] = useState(() => new Date());
@@ -77,7 +77,7 @@ export function DashboardPage() {
                     {sys.data.smtpHealth.latencyMs !== undefined && ` · ${sys.data.smtpHealth.latencyMs}ms`}
                   </Pill>
                 </div>
-                {isAdmin &&
+                {can('gateway:pause') &&
                   (g?.paused ? (
                     <Button size="sm" onClick={() => resume.mutate()} disabled={resume.isPending}>
                       <PlayCircle className="size-4" /> Resume

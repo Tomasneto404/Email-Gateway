@@ -1,26 +1,42 @@
-import { MoreHorizontal, UserPlus } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { MailCheck, MoreHorizontal, UserPlus } from 'lucide-react';
 import { useState } from 'react';
-import { useDeleteUser, useInviteUser, useResetAccess, useResetTotp, useUpdateUser, useUsers, type User } from '@/api/queries';
+import { useDeleteUser, useInviteUser, useResetAccess, useResetTotp, useRoles, useUpdateUser, useUsers, type User } from '@/api/queries';
 import { Pill } from '@/components/common/badges';
 import { CopyButton, Field, PageHeader } from '@/components/common/page';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
 import { DataTable, type Column } from '@/components/data-table/data-table';
-import { Segmented } from '@/components/keys/segmented';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { useMe } from '@/lib/auth';
 import { fmtAgo } from '@/lib/format';
+import { covers } from '@/lib/permissions';
 import { isEmail } from '@/lib/schemas';
 
-function InviteLink({ path, hours }: { path: string; hours: number }) {
+type InviteResult = { invitePath: string; expiresInHours: number; emailed: boolean };
+
+function InviteLink({ path, hours, emailed, email }: { path: string; hours: number; emailed: boolean; email?: string }) {
   const url = `${window.location.origin}${path}`;
   return (
-    <div className="grid gap-2">
-      <p className="text-sm">Share this one-time link with the user (valid {hours}h, shown once). They set a password, then enroll TOTP at first sign-in.</p>
-      <div className="bg-muted flex items-center gap-2 rounded-md border p-2">
+    <div className="grid min-w-0 gap-3">
+      {emailed ? (
+        <div data-testid="invite-emailed" className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-300">
+          <MailCheck className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Invitation emailed{email ? <> to <b>{email}</b></> : null}. The link is valid for {hours}h and can be used once.
+          </span>
+        </div>
+      ) : (
+        <p className="text-sm">
+          Share this one-time link with the user (valid {hours}h, shown once). They choose a password and can then sign in.
+          <span className="text-muted-foreground block text-xs">Configure SYSTEM_MAIL_FROM and SMTP or Resend to send invitations by email.</span>
+        </p>
+      )}
+      <p className="text-muted-foreground text-xs">{emailed ? 'You can also copy the link and share it another way:' : null}</p>
+      <div className="bg-muted flex min-w-0 items-center gap-2 rounded-md border p-2">
         <code data-testid="invite-link" className="min-w-0 flex-1 truncate font-mono text-xs">
           {url}
         </code>
@@ -30,13 +46,45 @@ function InviteLink({ path, hours }: { path: string; hours: number }) {
   );
 }
 
+/** Role checklist; roles granting permissions the current user lacks are disabled (anti-escalation). */
+function RolePicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+  const { user } = useMe();
+  const roles = useRoles();
+  return (
+    <div className="grid gap-1 rounded-md border p-2" role="group" aria-label="Roles">
+      {roles.data?.items.map((r) => {
+        const allowed = covers(user?.permissions, r.permissions);
+        const checked = value.includes(r.id);
+        return (
+          <label key={r.id} className={`hover:bg-accent/50 flex items-start gap-2 rounded px-2 py-1.5 text-sm ${!allowed ? 'opacity-50' : ''}`}>
+            <Checkbox
+              className="mt-0.5"
+              checked={checked}
+              disabled={!allowed && !checked}
+              onCheckedChange={(c) => onChange(c ? [...value, r.id] : value.filter((x) => x !== r.id))}
+              aria-label={r.name}
+            />
+            <span className="min-w-0">
+              <span className="font-medium">{r.name}</span>
+              {r.permissions.includes('*') && <Pill color="violet" className="ml-1.5">full access</Pill>}
+              {r.description && <span className="text-muted-foreground block text-xs">{r.description}</span>}
+            </span>
+          </label>
+        );
+      })}
+      <Link to="/roles" className="text-primary px-2 pt-1 text-xs hover:underline">
+        Manage roles →
+      </Link>
+    </div>
+  );
+}
+
 function InviteDialog() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'admin' | 'viewer'>('viewer');
-  const [bodies, setBodies] = useState(false);
-  const [result, setResult] = useState<{ invitePath: string; expiresInHours: number } | null>(null);
+  const [roleIds, setRoleIds] = useState<string[]>([]);
+  const [result, setResult] = useState<InviteResult | null>(null);
   const invite = useInviteUser();
   return (
     <>
@@ -51,43 +99,37 @@ function InviteDialog() {
             setResult(null);
             setEmail('');
             setName('');
+            setRoleIds([]);
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Invite admin user</DialogTitle>
-            <DialogDescription>Local account with password + mandatory TOTP. SSO users are provisioned automatically from Authentik groups.</DialogDescription>
+            <DialogDescription>Local account with a password and optional two-factor authentication. SSO users get their roles from Authentik groups automatically.</DialogDescription>
           </DialogHeader>
           {result ? (
-            <InviteLink path={result.invitePath} hours={result.expiresInHours} />
+            <InviteLink path={result.invitePath} hours={result.expiresInHours} emailed={result.emailed} email={email} />
           ) : (
-            <div className="grid gap-3">
-              <Field label="Email" htmlFor="u-email">
-                <Input id="u-email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <div className="grid gap-4">
+              <div className="grid items-start gap-x-4 gap-y-4 sm:grid-cols-2">
+                <Field label="Email" htmlFor="u-email">
+                  <Input id="u-email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </Field>
+                <Field label="Name" htmlFor="u-name">
+                  <Input id="u-name" value={name} onChange={(e) => setName(e.target.value)} />
+                </Field>
+              </div>
+              <Field label="Roles" hint="Permissions are the union of all selected roles.">
+                <RolePicker value={roleIds} onChange={setRoleIds} />
               </Field>
-              <Field label="Name" htmlFor="u-name">
-                <Input id="u-name" value={name} onChange={(e) => setName(e.target.value)} />
-              </Field>
-              <Field label="Role">
-                <Segmented label="Role" value={role} onChange={setRole} options={[{ value: 'viewer', label: 'Viewer (read-only)' }, { value: 'admin', label: 'Admin' }]} />
-              </Field>
-              {role === 'viewer' && (
-                <label className="flex items-center justify-between rounded-md border p-3 text-sm">
-                  Can view message bodies
-                  <Switch checked={bodies} onCheckedChange={setBodies} />
-                </label>
-              )}
             </div>
           )}
           <DialogFooter>
             {result ? (
               <Button onClick={() => setOpen(false)}>Done</Button>
             ) : (
-              <Button
-                disabled={!isEmail(email) || invite.isPending}
-                onClick={async () => setResult(await invite.mutateAsync({ email, name, role, canViewBodies: role === 'viewer' ? bodies : undefined }))}
-              >
+              <Button disabled={!isEmail(email) || !roleIds.length || invite.isPending} onClick={async () => setResult(await invite.mutateAsync({ email, name, roleIds }))}>
                 Create invite
               </Button>
             )}
@@ -98,15 +140,44 @@ function InviteDialog() {
   );
 }
 
+function EditRolesDialog({ user, onClose }: { user: User; onClose: () => void }) {
+  const [roleIds, setRoleIds] = useState(user.roles.map((r) => r.id));
+  const update = useUpdateUser();
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Roles of {user.email}</DialogTitle>
+          <DialogDescription>Takes effect immediately. Recorded in the activity log.</DialogDescription>
+        </DialogHeader>
+        <RolePicker value={roleIds} onChange={setRoleIds} />
+        <DialogFooter>
+          <Button
+            disabled={!roleIds.length || update.isPending}
+            onClick={async () => {
+              await update.mutateAsync({ id: user.id, body: { roleIds } });
+              onClose();
+            }}
+          >
+            Save roles
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function UsersPage() {
-  const { user: me } = useMe();
+  const { user: me, can } = useMe();
   const { data, isLoading } = useUsers();
   const update = useUpdateUser();
   const resetTotp = useResetTotp();
   const resetAccess = useResetAccess();
   const del = useDeleteUser();
-  const [confirm, setConfirm] = useState<{ kind: 'disable' | 'delete' | 'totp' | 'access' | 'role'; user: User } | null>(null);
-  const [link, setLink] = useState<{ invitePath: string; expiresInHours: number } | null>(null);
+  const [confirm, setConfirm] = useState<{ kind: 'disable' | 'delete' | 'totp' | 'access'; user: User } | null>(null);
+  const [editRoles, setEditRoles] = useState<User | null>(null);
+  const [link, setLink] = useState<(InviteResult & { email: string }) | null>(null);
+  const manage = can('users:manage');
 
   const cols: Column<User>[] = [
     {
@@ -120,16 +191,20 @@ export function UsersPage() {
       ),
     },
     {
-      id: 'role',
-      header: 'Role',
+      id: 'roles',
+      header: 'Roles',
       cell: (u) => (
-        <span className="flex gap-1">
-          <Pill color={u.role === 'admin' ? 'violet' : 'gray'}>{u.role}</Pill>
-          {u.role === 'viewer' && u.canViewBodies && <Pill color="blue">bodies</Pill>}
+        <span className="flex flex-wrap gap-1">
+          {u.roles.length ? u.roles.map((r) => <Pill key={r.id} color={r.name === 'Admin' ? 'violet' : 'gray'}>{r.name}</Pill>) : <span className="text-muted-foreground text-xs">none</span>}
         </span>
       ),
     },
-    { id: 'source', header: 'Sign-in', cell: (u) => (u.authSource === 'authentik' ? <Pill color="blue">Authentik SSO</Pill> : <Pill>local{u.totpEnrolled ? ' · TOTP' : ''}</Pill>) },
+    {
+      id: 'source',
+      header: 'Sign-in',
+      cell: (u) =>
+        u.authSource === 'authentik' ? <Pill color="blue">Authentik SSO</Pill> : <Pill color={u.totpEnrolled ? 'green' : 'gray'}>{u.totpEnrolled ? 'password + 2FA' : 'password'}</Pill>,
+    },
     {
       id: 'state',
       header: 'Status',
@@ -144,7 +219,7 @@ export function UsersPage() {
       cell: (u) =>
         u.id === me?.id ? (
           <span className="text-muted-foreground text-xs">you</span>
-        ) : (
+        ) : manage ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="icon" variant="ghost" className="size-7" aria-label={`Actions for ${u.email}`}>
@@ -152,17 +227,14 @@ export function UsersPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {u.authSource === 'local' && (
+              {u.authSource === 'local' ? (
                 <>
-                  <DropdownMenuItem onClick={() => setConfirm({ kind: 'role', user: u })}>Make {u.role === 'admin' ? 'viewer' : 'admin'}…</DropdownMenuItem>
-                  {u.role === 'viewer' && (
-                    <DropdownMenuItem onClick={() => update.mutate({ id: u.id, body: { canViewBodies: !u.canViewBodies } })}>
-                      {u.canViewBodies ? 'Hide message bodies' : 'Allow message bodies'}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={() => setConfirm({ kind: 'totp', user: u })}>Reset 2FA…</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setEditRoles(u)}>Edit roles…</DropdownMenuItem>
+                  {u.totpEnrolled && <DropdownMenuItem onClick={() => setConfirm({ kind: 'totp', user: u })}>Reset 2FA…</DropdownMenuItem>}
                   <DropdownMenuItem onClick={() => setConfirm({ kind: 'access', user: u })}>Reset password (new invite)…</DropdownMenuItem>
                 </>
+              ) : (
+                <DropdownMenuItem disabled>Roles come from Authentik groups</DropdownMenuItem>
               )}
               {u.disabled ? (
                 <DropdownMenuItem onClick={() => update.mutate({ id: u.id, body: { disabled: false } })}>Enable</DropdownMenuItem>
@@ -175,7 +247,7 @@ export function UsersPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        ),
+        ) : null,
     },
   ];
 
@@ -183,30 +255,33 @@ export function UsersPage() {
   const texts = {
     disable: { title: 'Disable user?', desc: 'They are signed out immediately and cannot sign in.', label: 'Disable' },
     delete: { title: 'Delete user?', desc: 'The account is removed. Activity log entries are kept.', label: 'Delete' },
-    totp: { title: 'Reset two-factor authentication?', desc: 'They are signed out and must enroll a new authenticator at next sign-in.', label: 'Reset 2FA' },
-    access: { title: 'Reset password?', desc: 'Password and TOTP are cleared, sessions revoked, and a new invite link is generated.', label: 'Reset access' },
-    role: { title: 'Change role?', desc: 'They are signed out so the new role applies immediately.', label: 'Change role' },
+    totp: { title: 'Reset two-factor authentication?', desc: 'Their authenticator is removed and they are signed out.', label: 'Reset 2FA' },
+    access: { title: 'Reset password?', desc: 'Password and 2FA are cleared, sessions revoked, and a new invite link is generated.', label: 'Reset access' },
   };
 
   return (
     <>
-      <PageHeader title="Admin users" description="Who can manage the gateway." actions={<InviteDialog />} />
+      <PageHeader title="Admin users" description="Who can manage the gateway, and with which roles." actions={manage && <InviteDialog />} />
       <DataTable columns={cols} rows={data?.items} rowKey={(u) => u.id} loading={isLoading} total={data?.total} empty={{ title: 'No users' }} />
+      {editRoles && <EditRolesDialog user={editRoles} onClose={() => setEditRoles(null)} />}
       {c && (
         <ConfirmDialog
           open
           onOpenChange={(o) => !o && setConfirm(null)}
           title={texts[c.kind].title}
-          description={<>{c.user.email}: {texts[c.kind].desc}</>}
+          description={
+            <>
+              {c.user.email}: {texts[c.kind].desc}
+            </>
+          }
           confirmLabel={texts[c.kind].label}
-          destructive={c.kind !== 'role'}
+          destructive
           typeToConfirm={c.kind === 'delete' ? c.user.email : undefined}
           onConfirm={async () => {
             if (c.kind === 'disable') await update.mutateAsync({ id: c.user.id, body: { disabled: true } });
-            if (c.kind === 'role') await update.mutateAsync({ id: c.user.id, body: { role: c.user.role === 'admin' ? 'viewer' : 'admin' } });
             if (c.kind === 'delete') await del.mutateAsync(c.user.id);
             if (c.kind === 'totp') await resetTotp.mutateAsync(c.user.id);
-            if (c.kind === 'access') setLink(await resetAccess.mutateAsync(c.user.id));
+            if (c.kind === 'access') setLink({ ...(await resetAccess.mutateAsync(c.user.id)), email: c.user.email });
           }}
         />
       )}
@@ -215,7 +290,7 @@ export function UsersPage() {
           <DialogHeader>
             <DialogTitle>New invite link</DialogTitle>
           </DialogHeader>
-          {link && <InviteLink path={link.invitePath} hours={link.expiresInHours} />}
+          {link && <InviteLink path={link.invitePath} hours={link.expiresInHours} emailed={link.emailed} email={link.email} />}
         </DialogContent>
       </Dialog>
     </>

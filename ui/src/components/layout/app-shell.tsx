@@ -14,12 +14,15 @@ import {
   PlayCircle,
   Search,
   Settings,
+  Shield,
+  ShieldCheck,
   Sun,
   Users,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, call, setCsrfToken } from '@/api/client';
 import { usePauseGateway, useResumeGateway, useSystemState } from '@/api/queries';
+import { TwoFactorDialog } from '@/components/account/two-factor-dialog';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -27,18 +30,21 @@ import { useMe } from '@/lib/auth';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
-const NAV = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, key: 'g d' },
-  { to: '/keys', label: 'API keys', icon: KeyRound, key: 'g k' },
-  { to: '/messages', label: 'Messages', icon: Mail, key: 'g m' },
-  { to: '/approvals', label: 'Approvals', icon: CheckCheck, key: 'g a' },
-  { to: '/users', label: 'Admin users', icon: Users, key: 'g u', admin: true },
-  { to: '/activity', label: 'Activity log', icon: Activity, key: 'g l' },
-  { to: '/settings', label: 'Settings', icon: Settings, key: 'g s' },
+/** Navigation, each entry visible with ANY of its permissions (the server enforces them too). */
+export const NAV = [
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, key: 'g d', perms: ['dashboard:read'] },
+  { to: '/keys', label: 'API keys', icon: KeyRound, key: 'g k', perms: ['keys:read'] },
+  { to: '/messages', label: 'Messages', icon: Mail, key: 'g m', perms: ['messages:read'] },
+  { to: '/approvals', label: 'Approvals', icon: CheckCheck, key: 'g a', perms: ['messages:read'] },
+  { to: '/users', label: 'Admin users', icon: Users, key: 'g u', perms: ['users:read'] },
+  { to: '/roles', label: 'Roles', icon: Shield, key: 'g r', perms: ['users:read', 'roles:manage'] },
+  { to: '/activity', label: 'Activity log', icon: Activity, key: 'g l', perms: ['audit:read'] },
+  { to: '/settings', label: 'Settings', icon: Settings, key: 'g s', perms: ['settings:read'] },
 ] as const;
 
 export function GatewayPill() {
-  const { data } = useSystemState();
+  const { can } = useMe();
+  const { data } = useSystemState(can('dashboard:read'));
   if (!data) return null;
   const open = data.breakers.some((b) => b.state === 'open');
   return (
@@ -57,14 +63,16 @@ export function GatewayPill() {
 }
 
 export function AppShell() {
-  const { user, isAdmin } = useMe();
-  const { data: sys } = useSystemState();
+  const { user, can, canAny } = useMe();
+  const nav = NAV.filter((n) => canAny(...n.perms));
+  const { data: sys } = useSystemState(can('dashboard:read'));
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { theme, setTheme } = useTheme();
   const [cmd, setCmd] = useState(false);
   const [confirmPause, setConfirmPause] = useState(false);
+  const [twoFactor, setTwoFactor] = useState(false);
   const pause = usePauseGateway();
   const resume = useResumeGateway();
 
@@ -88,13 +96,13 @@ export function AppShell() {
       }
       if (g) {
         const n = NAV.find((x) => x.key === `g ${e.key}`);
-        if (n && (!('admin' in n) || isAdmin)) navigate({ to: n.to });
+        if (n && canAny(...n.perms)) navigate({ to: n.to });
         g = false;
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [navigate, isAdmin]);
+  }, [navigate, canAny]);
 
   const logout = async () => {
     const r = await call(api.POST('/admin/auth/logout')).catch(() => ({ redirect: null }));
@@ -120,7 +128,7 @@ export function AppShell() {
           <kbd className="bg-muted ml-auto rounded px-1 font-mono text-[10px]">⌘K</kbd>
         </button>
         <nav className="grid gap-0.5 px-2">
-          {NAV.filter((n) => !('admin' in n) || isAdmin).map((n) => (
+          {nav.map((n) => (
             <Link
               key={n.to}
               to={n.to}
@@ -151,7 +159,9 @@ export function AppShell() {
               <span className="bg-primary/15 text-primary grid size-6 place-items-center rounded-full text-xs font-semibold uppercase">{user?.email[0]}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-xs font-medium" data-testid="current-user">{user?.email}</span>
-                <span className="text-muted-foreground block text-[11px]">{user?.role}</span>
+                <span className="text-muted-foreground block truncate text-[11px]" data-testid="current-roles">
+                  {user?.roles.map((r) => r.name).join(', ') || 'no roles'}
+                </span>
               </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
@@ -166,6 +176,11 @@ export function AppShell() {
                 <Monitor className="size-4" /> System {theme === 'system' && '✓'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setTwoFactor(true)}>
+                <ShieldCheck className="size-4" /> Two-factor authentication
+                {user?.authSource === 'local' && !user.totpEnrolled && <span className="text-muted-foreground ml-auto text-[11px]">off</span>}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>
                 <LogOut className="size-4" /> Log out
               </DropdownMenuItem>
@@ -178,7 +193,7 @@ export function AppShell() {
           <Mail className="text-primary size-4" />
           <span className="font-semibold">mail-gateway</span>
           <div className="ml-auto flex gap-1">
-            {NAV.filter((n) => !('admin' in n) || isAdmin).map((n) => (
+            {nav.map((n) => (
               <Link key={n.to} to={n.to} className="text-muted-foreground p-1.5" aria-label={n.label}>
                 <n.icon className="size-4" />
               </Link>
@@ -195,7 +210,7 @@ export function AppShell() {
         <CommandList>
           <CommandEmpty>No results.</CommandEmpty>
           <CommandGroup heading="Navigate">
-            {NAV.filter((n) => !('admin' in n) || isAdmin).map((n) => (
+            {nav.map((n) => (
               <CommandItem
                 key={n.to}
                 onSelect={() => {
@@ -208,7 +223,7 @@ export function AppShell() {
               </CommandItem>
             ))}
           </CommandGroup>
-          {isAdmin && sys && (
+          {can('gateway:pause') && sys && (
             <CommandGroup heading="Gateway">
               {sys.gateway.paused ? (
                 <CommandItem
@@ -238,6 +253,7 @@ export function AppShell() {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+      <TwoFactorDialog open={twoFactor} onOpenChange={setTwoFactor} />
       <PauseDialog open={confirmPause} onOpenChange={setConfirmPause} onConfirm={(r) => pause.mutateAsync(r || 'manual (admin UI)')} />
     </div>
   );

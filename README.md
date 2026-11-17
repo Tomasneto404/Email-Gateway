@@ -48,11 +48,11 @@ cp .env.example .env
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 16)/; s#^APP_ENCRYPTION_KEY=.*#APP_ENCRYPTION_KEY=$(openssl rand -base64 32)#" .env
 docker compose up -d --wait          # postgres, redis, mailpit, migrate, api, worker
 
-# first administrator (prompts for a password; TOTP is set up at first login)
+# first administrator (prompts for a password)
 docker compose exec api node dist/cli.js users:create --email you@company.com --role admin
 ```
 
-Then open <http://127.0.0.1:3000/ui/>, sign in, scan the TOTP QR code, and manage everything from the UI.
+Then open <http://127.0.0.1:3000/ui/> and sign in. Enabling two-factor authentication (account menu → *Two-factor authentication*) is recommended.
 
 - API: <http://127.0.0.1:3000> (`API_BIND`/`API_PORT`). API reference (Scalar): <http://127.0.0.1:3000/docs>; Swagger UI: `/swagger`.
 - `./scripts/smoke.sh` runs an end-to-end check of the API through the CLI. It needs no UI login.
@@ -205,7 +205,8 @@ A React single-page app, served by the API on the same origin, so no CORS is inv
 | **API keys** | List with today's/hour's usage against quota. Create wizard that shows the secret once. Key page with policy editor (mode with a live-promotion warning, sender, recipient chips, quotas, limits, attachments, provider), 24 h usage chart, recent messages, rotate, enable/disable, delete and **Send test email** |
 | **Messages** | Search by status, key, recipient, subject and date range. Detail drawer with metadata, status timeline, attempts, provider response, headers and text body. The HTML body is shown in a sandboxed iframe |
 | **Approvals** | Inbox of `pending_approval` messages with preview, approve/reject (with reason) and bulk actions |
-| **Admin users** (admin only) | Invite a user (one-time link), change role or body access, reset 2FA, reset password, disable, delete |
+| **Admin users** | Invite a user with roles (one-time link), edit roles, reset 2FA, reset password, disable, delete |
+| **Roles** | RBAC: create/edit roles as sets of permissions, map Authentik groups to roles |
 | **Activity log** | The `admin_audit` table, filterable by action, actor and outcome |
 | **Settings** | Effective configuration, read-only and without secrets. Includes the Mailpit link in dev |
 
@@ -220,32 +221,56 @@ Confirmations:
 
 - **Local accounts.**
   - Passwords are hashed with argon2id and must be at least 12 characters.
-  - TOTP is **mandatory** and is set up at first login.
+  - TOTP two-factor is **optional by default**. Each user turns it on from the account menu by scanning a QR code and confirming a code.
+    Once on, the code is required at every sign-in, and turning it off requires the current password.
+  - Set `TOTP_REQUIRED=true` to make TOTP mandatory for every local user: it is set up at first sign-in and can't be disabled.
   - TOTP secrets are encrypted with AES-256-GCM using `APP_ENCRYPTION_KEY`, and a TOTP code can't be reused.
 - **Rate limits.** The account locks after `LOGIN_MAX_FAILURES` failed attempts, and login attempts are also rate-limited per IP.
 - **Sessions.**
   - Server-side sessions use a `__Host-mg_session` cookie: httpOnly, Secure, SameSite=Strict.
   - Sessions expire after `SESSION_IDLE_MINUTES` of inactivity, and after `SESSION_TTL_HOURS` at most.
-  - The session id is rotated after MFA.
+  - The session id is rotated after the second factor.
 - **CSRF.** Every state-changing request needs a per-session token in `X-CSRF-Token` **and** a same-origin `Origin`.
   Set `PUBLIC_URL` when the gateway sits behind a TLS-terminating proxy.
-- **Authentik SSO** (optional): Authentik groups map to roles, and users are created on first login. See [docs/authentik.md](docs/authentik.md).
-- **Roles.**
-  - `admin` has full control.
-  - `viewer` is read-only; the server enforces this on every endpoint.
-  - Viewers can't see message bodies or the HTML preview unless they have `canViewBodies` (or the Authentik bodies group).
+- **Authentik SSO** (optional): each role lists the Authentik groups that grant it, edited on the Roles page.
+  Users are created on first login, and their roles are re-synced from their groups at every login. See [docs/authentik.md](docs/authentik.md).
+- **Roles (RBAC).** Each role is a set of permissions, and a user can hold several roles; they get the union of the permissions.
+  - Permissions: `dashboard:read`, `keys:read|create|update|promote|rotate|disable|delete|test_send`, `messages:read|bodies`,
+    `approvals:decide`, `gateway:pause`, `users:read|manage`, `roles:manage`, `audit:read`, `settings:read`.
+    A role can also hold `<area>:*` or `*`.
+  - Built-in roles:
+
+    | Role | Grants |
+    |---|---|
+    | **Admin** | `*`; can't be changed or deleted |
+    | **Operator** | keys (except promote/delete), gateway pause, read-only views |
+    | **Approver** | approvals and message bodies |
+    | **Auditor** | read-only everything, including bodies and users |
+    | **Viewer** | read-only, bodies hidden |
+    | **Body reader** | add-on that only grants `messages:bodies` |
+
+    Built-ins can't be deleted or renamed. You can create your own roles in **Roles**.
+  - Promoting a key out of sandbox (to live or approval) needs `keys:promote`. Other policy edits need `keys:update`.
+  - **Anti-escalation:** nobody can create a role, or grant, revoke or affect permissions, beyond what they hold themselves.
+    That includes disabling or deleting a more privileged user.
+  - At least one active user with full access (`*`) always remains.
+  - Changes to roles and assignments apply on the user's very next request. Every change is audited.
+  - The server enforces permissions on every endpoint; the UI only hides what you can't use.
 - **Bootstrap.**
   - The first admin is created with the CLI (`users:create`); there is no sign-up page.
   - Other users are invited from the UI with a one-time link, or created with the CLI.
+  - When `SYSTEM_MAIL_FROM` is set and SMTP or Resend is enabled, invitations and password resets are **emailed** to the user.
+    The worker sends them through the live provider; the API never holds provider credentials. The link is also shown in the UI as a fallback.
+    Invite tokens are masked in request logs.
 - **Static admin token.** Only for CLI and automation, and **disabled by default** (`ADMIN_TOKEN_ENABLED`).
 - **Audit.** Every admin action is written to `admin_audit` and emitted as a structured `admin_action` log event.
-  This covers key create/update/promote/rotate/disable/delete, test sends, approve/reject, pause/resume, user changes and login success/failure.
+  This covers key create/update/promote/rotate/disable/delete, test sends, approve/reject, pause/resume, user changes, enabling/disabling 2FA and login success/failure.
 
 User CLI:
 
 ```bash
-docker compose exec api node dist/cli.js users:create --email a@b.c --role admin|viewer [--bodies] [--password-stdin]
-docker compose exec api node dist/cli.js users:list | users:reset-2fa --email … | users:reset-access --email … | users:disable --email …
+docker compose exec api node dist/cli.js users:create --email a@b.c [--role Admin --role Viewer …] [--password-stdin]   # default role: Admin
+docker compose exec api node dist/cli.js users:list | roles:list | users:reset-2fa --email … | users:reset-access --email … | users:disable --email …
 ```
 
 ### Security headers
@@ -337,7 +362,7 @@ docker compose -f docker-compose.yml -f compose.secrets.yml up -d
 - The request body has a hard size limit (`MAX_REQUEST_BYTES`). Unknown fields are rejected.
 - The worker uses nodemailer with `disableFileAccess`/`disableUrlAccess`, so attachments can't read files or URLs.
 - Containers run as non-root `node` with a read-only root filesystem, `cap_drop: ALL` and `no-new-privileges`. Every service has a healthcheck.
-- Admin UI: argon2id + mandatory TOTP, httpOnly/Secure/SameSite=Strict sessions, CSRF token + Origin check, lockout, a strict CSP and sandboxed email previews. See [Admin UI](#admin-ui-ui).
+- Admin UI: argon2id + optional (or enforced, `TOTP_REQUIRED`) TOTP, httpOnly/Secure/SameSite=Strict sessions, CSRF token + Origin check, lockout, a strict CSP and sandboxed email previews. See [Admin UI](#admin-ui-ui).
 - Resend webhooks are verified with Svix signatures, and stale timestamps are rejected.
 
 ---
@@ -358,7 +383,7 @@ npm run dev:api / dev:worker   # nest --watch (needs DATABASE_URL, REDIS_URL)
 
 # end-to-end against a running `docker compose up` (dev override):
 npx playwright install chromium
-npx playwright test -c ui/playwright.config.ts   # CLI admin → login + TOTP → create key → test send → Messages; preview sandbox; CSP
+npx playwright test -c ui/playwright.config.ts   # CLI admin → login → opt-in 2FA → create key → test send → Messages; preview sandbox; CSP
 ```
 
 Layout: `src/send/send.service.ts` holds the single send pipeline and `src/policy/` the pure policy engine plus the Redis guardrails.

@@ -7,19 +7,10 @@ import { EventLogger } from '../common/event-logger';
 import { GatewayError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { REDIS } from '../common/redis';
-import { AdminRole } from '../generated/prisma/client';
 
-export interface RoleMapping {
-  role: AdminRole;
-  canViewBodies: boolean;
-}
-
-/** Maps Authentik group names to a gateway role. No matching group → no access. */
-export function mapGroups(groups: unknown, cfg: Pick<AppConfig, 'AUTHENTIK_ADMIN_GROUP' | 'AUTHENTIK_VIEWER_GROUP' | 'AUTHENTIK_BODIES_GROUP'>): RoleMapping | null {
-  const g = Array.isArray(groups) ? groups.filter((x): x is string => typeof x === 'string') : typeof groups === 'string' ? [groups] : [];
-  if (g.includes(cfg.AUTHENTIK_ADMIN_GROUP)) return { role: 'admin', canViewBodies: true };
-  if (g.includes(cfg.AUTHENTIK_VIEWER_GROUP)) return { role: 'viewer', canViewBodies: g.includes(cfg.AUTHENTIK_BODIES_GROUP) };
-  return null;
+/** Normalises the groups claim (array or single string). */
+export function groupsFromClaim(claim: unknown): string[] {
+  return Array.isArray(claim) ? claim.filter((x): x is string => typeof x === 'string') : typeof claim === 'string' ? [claim] : [];
 }
 
 /** Authentik SSO via OpenID Connect (authorization code + PKCE + state + nonce). */
@@ -102,17 +93,20 @@ export class AuthentikService {
     const sub = String(claims.sub);
     const email = String(claims.email ?? '').toLowerCase();
     const name = String(claims.name ?? claims.preferred_username ?? '');
-    const mapping = mapGroups(claims[this.cfg.AUTHENTIK_GROUPS_CLAIM], this.cfg);
+    const groups = groupsFromClaim(claims[this.cfg.AUTHENTIK_GROUPS_CLAIM]);
+    // RBAC: every role whose Authentik groups intersect the user's groups is granted.
+    const roles = groups.length ? await this.prisma.role.findMany({ where: { ssoGroups: { hasSome: groups } } }) : [];
     const actor = { type: 'user' as const, label: email || sub, ip };
 
-    if (!mapping) {
-      await this.audit.record(actor, { action: 'auth.login', outcome: 'failure', details: { method: 'authentik', reason: 'no_mapped_group' } });
+    if (!roles.length) {
+      await this.audit.record(actor, { action: 'auth.login', outcome: 'failure', details: { method: 'authentik', reason: 'no_mapped_group', groups } });
       this.events.emit('login_failed', { outcome: 'failure', reason: 'no_mapped_group', user: email, method: 'authentik', ip });
-      throw new GatewayError('FORBIDDEN', 'Your Authentik account is not in a mail-gateway group. Ask an administrator for access.');
+      throw new GatewayError('FORBIDDEN', 'Your Authentik account is not in a group mapped to a mail-gateway role. Ask an administrator for access.');
     }
     if (!email) throw new GatewayError('SSO_ERROR', 'Authentik did not provide an email claim (add the "email" scope).');
+    const roleNames = roles.map((r) => r.name).sort();
 
-    let user = await this.prisma.adminUser.findUnique({ where: { oidcSubject: sub } });
+    let user = await this.prisma.adminUser.findUnique({ where: { oidcSubject: sub }, include: { roles: { include: { role: true } } } });
     if (!user) {
       const byEmail = await this.prisma.adminUser.findUnique({ where: { email } });
       if (byEmail) {
@@ -121,28 +115,29 @@ export class AuthentikService {
         throw new GatewayError('FORBIDDEN', `A local account with ${email} already exists. An administrator must remove it before SSO login is possible.`);
       }
       user = await this.prisma.adminUser.create({
-        data: { email, name, role: mapping.role, canViewBodies: mapping.canViewBodies, authSource: 'authentik', oidcSubject: sub },
+        data: { email, name, authSource: 'authentik', oidcSubject: sub, roles: { create: roles.map((r) => ({ roleId: r.id })) } },
+        include: { roles: { include: { role: true } } },
       });
-      await this.audit.record(actor, { action: 'user.provisioned', targetType: 'admin_user', targetId: user.id, details: { role: mapping.role, method: 'authentik' } });
+      await this.audit.record(actor, { action: 'user.provisioned', targetType: 'admin_user', targetId: user.id, details: { roles: roleNames, method: 'authentik' } });
     } else {
       if (user.disabled) {
         await this.audit.record(actor, { action: 'auth.login', outcome: 'failure', targetId: user.id, details: { method: 'authentik', reason: 'disabled' } });
         throw new GatewayError('FORBIDDEN', 'Your account is disabled.');
       }
-      if (user.role !== mapping.role || user.canViewBodies !== mapping.canViewBodies || user.email !== email) {
-        await this.audit.record(actor, {
-          action: 'user.role_synced',
-          targetType: 'admin_user',
-          targetId: user.id,
-          details: { from: { role: user.role, canViewBodies: user.canViewBodies }, to: mapping },
-        });
+      const current = user.roles.map((r) => r.role.name).sort();
+      if (JSON.stringify(current) !== JSON.stringify(roleNames)) {
+        await this.prisma.$transaction([
+          this.prisma.adminUserRole.deleteMany({ where: { userId: user.id } }),
+          this.prisma.adminUserRole.createMany({ data: roles.map((r) => ({ userId: user!.id, roleId: r.id })) }),
+        ]);
+        await this.audit.record(actor, { action: 'user.role_synced', targetType: 'admin_user', targetId: user.id, details: { from: current, to: roleNames } });
       }
-      user = await this.prisma.adminUser.update({ where: { id: user.id }, data: { role: mapping.role, canViewBodies: mapping.canViewBodies, email, name } });
+      await this.prisma.adminUser.update({ where: { id: user.id }, data: { email, name } });
     }
-    user = await this.prisma.adminUser.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    await this.audit.record({ ...actor, id: user.id }, { action: 'auth.login', targetType: 'admin_user', targetId: user.id, details: { method: 'authentik' } });
+    const final = await this.prisma.adminUser.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await this.audit.record({ ...actor, id: final.id }, { action: 'auth.login', targetType: 'admin_user', targetId: final.id, details: { method: 'authentik', roles: roleNames } });
     this.events.emit('login_succeeded', { outcome: 'success', user: email, method: 'authentik', ip });
-    return { user, idToken: tokens.id_token };
+    return { user: final, idToken: tokens.id_token };
   }
 
   async endSessionUrl(idTokenHint: string | null): Promise<string | null> {

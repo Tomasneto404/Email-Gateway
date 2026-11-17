@@ -7,7 +7,7 @@ let s: Stack;
 let admin: LoggedIn;
 
 beforeAll(async () => {
-  s = await startStack({ LOGIN_MAX_FAILURES: '3' });
+  s = await startStack({ LOGIN_MAX_FAILURES: '3', TOTP_REQUIRED: 'true' });
   await resetState(s);
   admin = await login(s, 'admin');
 });
@@ -37,7 +37,7 @@ describe('local login: password + mandatory TOTP', () => {
     const code = await nextCode(s, id);
     const v = await agent.post('/admin/auth/totp/verify').set(o).send({ code });
     expect(v.status).toBe(200);
-    expect(v.body.user).toMatchObject({ email, role: 'admin', totpEnrolled: true });
+    expect(v.body.user).toMatchObject({ email, roles: [{ name: 'Admin' }], permissions: ['*'], totpEnrolled: true });
     expect((await agent.get('/admin/keys')).status).toBe(200);
 
     // replayed code is refused on the next login
@@ -138,7 +138,7 @@ describe('viewer role', () => {
       ['post', '/admin/keys', { name: uname('nope'), fromAddress: 'a@example.com' }],
       ['post', '/admin/gateway/pause', {}],
       ['post', `/admin/messages/${sent.body.id}/approve`, {}],
-      ['patch', `/admin/users/${viewer.userId}`, { role: 'admin' }],
+      ['patch', `/admin/users/${viewer.userId}`, { roleIds: ['Admin'] }],
     ] as const) {
       const r = await viewer.agent[method](path).set(viewer.h).send(body);
       expect({ path, status: r.status, code: r.body.error?.code }).toEqual({ path, status: 403, code: 'FORBIDDEN' });
@@ -178,7 +178,7 @@ describe('HTML preview', () => {
 
 describe('users management + invites', () => {
   it('invite → set password → login with TOTP; cannot remove last admin; disabling kills sessions', async () => {
-    const inv = await admin.agent.post('/admin/users').set(admin.h).send({ email: `${uname('inv')}@admins.test`, role: 'viewer' });
+    const inv = await admin.agent.post('/admin/users').set(admin.h).send({ email: `${uname('inv')}@admins.test`, roleIds: ['Viewer'] });
     expect(inv.status).toBe(201);
     const token = inv.body.invitePath.split('/').pop();
     const info = await request(s.baseUrl).get(`/admin/auth/invite/${token}`);

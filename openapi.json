@@ -155,24 +155,26 @@
           },
           "localLogin": {
             "type": "boolean"
+          },
+          "totpRequired": {
+            "description": "true when every local user must use TOTP",
+            "type": "boolean"
           }
         },
         "required": [
           "localLogin",
-          "authentik"
+          "authentik",
+          "totpRequired"
         ],
         "type": "object"
       },
       "AuthentikSettingsDto": {
         "properties": {
-          "adminGroup": {
-            "type": "string"
-          },
-          "bodiesGroup": {
-            "type": "string"
-          },
           "enabled": {
             "type": "boolean"
+          },
+          "groupsClaim": {
+            "type": "string"
           },
           "issuer": {
             "nullable": true,
@@ -180,18 +182,13 @@
           },
           "scopes": {
             "type": "string"
-          },
-          "viewerGroup": {
-            "type": "string"
           }
         },
         "required": [
           "enabled",
           "issuer",
-          "adminGroup",
-          "viewerGroup",
-          "bodiesGroup",
-          "scopes"
+          "scopes",
+          "groupsClaim"
         ],
         "type": "object"
       },
@@ -380,6 +377,34 @@
         ],
         "type": "object"
       },
+      "CreateRoleDto": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "description": "Permission ids, \"<area>:*\" or \"*\"",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ssoGroups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "permissions"
+        ],
+        "type": "object"
+      },
       "ErrorBodyDto": {
         "properties": {
           "code": {
@@ -452,6 +477,10 @@
       },
       "InviteLinkDto": {
         "properties": {
+          "emailed": {
+            "description": "true when the link was queued for delivery by email (SYSTEM_MAIL_FROM + SMTP/Resend configured)",
+            "type": "boolean"
+          },
           "expiresInHours": {
             "type": "number"
           },
@@ -462,12 +491,17 @@
         },
         "required": [
           "invitePath",
-          "expiresInHours"
+          "expiresInHours",
+          "emailed"
         ],
         "type": "object"
       },
       "InviteResultDto": {
         "properties": {
+          "emailed": {
+            "description": "true when the link was queued for delivery by email (SYSTEM_MAIL_FROM + SMTP/Resend configured)",
+            "type": "boolean"
+          },
           "expiresInHours": {
             "type": "number"
           },
@@ -482,32 +516,30 @@
         "required": [
           "invitePath",
           "expiresInHours",
+          "emailed",
           "user"
         ],
         "type": "object"
       },
       "InviteUserDto": {
         "properties": {
-          "canViewBodies": {
-            "type": "boolean"
-          },
           "email": {
             "type": "string"
           },
           "name": {
             "type": "string"
           },
-          "role": {
-            "enum": [
-              "admin",
-              "viewer"
-            ],
-            "type": "string"
+          "roleIds": {
+            "description": "Role ids (at least one)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
           "email",
-          "role"
+          "roleIds"
         ],
         "type": "object"
       },
@@ -826,12 +858,26 @@
       },
       "LoginResultDto": {
         "properties": {
+          "csrfToken": {
+            "description": "Present when next=done",
+            "type": "string"
+          },
           "next": {
+            "description": "done: signed in (no 2FA for this user). totp_verify: enter the TOTP code. totp_enroll: 2FA is mandatory and must be set up now.",
             "enum": [
+              "done",
               "totp_enroll",
               "totp_verify"
             ],
             "type": "string"
+          },
+          "user": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserDto"
+              }
+            ],
+            "description": "Present when next=done"
           }
         },
         "required": [
@@ -1517,6 +1563,25 @@
         },
         "type": "object"
       },
+      "PermissionDto": {
+        "properties": {
+          "area": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "area",
+          "label"
+        ],
+        "type": "object"
+      },
       "QueueDepthDto": {
         "properties": {
           "active": {
@@ -1584,6 +1649,94 @@
         "required": [
           "enabled",
           "webhookConfigured"
+        ],
+        "type": "object"
+      },
+      "RoleDto": {
+        "properties": {
+          "builtin": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "editable": {
+            "description": "false for the built-in Admin role",
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ssoGroups": {
+            "description": "Authentik groups that grant this role on SSO login",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "userCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "permissions",
+          "ssoGroups",
+          "builtin",
+          "editable",
+          "userCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "RoleListDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RoleDto"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "RoleRefDto": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -1815,6 +1968,12 @@
           "smtp": {
             "$ref": "#/components/schemas/SmtpSettingsDto"
           },
+          "systemMail": {
+            "$ref": "#/components/schemas/SystemMailSettingsDto"
+          },
+          "totpRequired": {
+            "type": "boolean"
+          },
           "trustProxy": {
             "type": "string"
           }
@@ -1824,6 +1983,7 @@
           "smtp",
           "resend",
           "mailpitSmtp",
+          "systemMail",
           "mailpitUiUrl",
           "bodyRetentionDays",
           "recordRetentionDays",
@@ -1840,6 +2000,7 @@
           "maxRequestBytes",
           "trustProxy",
           "localLogin",
+          "totpRequired",
           "adminTokenEnabled",
           "sessionTtlHours",
           "sessionIdleMinutes",
@@ -1932,6 +2093,31 @@
           "rejectionsByReason",
           "topKeys",
           "outcomes"
+        ],
+        "type": "object"
+      },
+      "SystemMailSettingsDto": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "from": {
+            "nullable": true,
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "smtp",
+              "resend"
+            ],
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "from",
+          "provider"
         ],
         "type": "object"
       },
@@ -2115,23 +2301,43 @@
         },
         "type": "object"
       },
+      "UpdateRoleDto": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ssoGroups": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "UpdateUserDto": {
         "properties": {
-          "canViewBodies": {
-            "type": "boolean"
-          },
           "disabled": {
             "type": "boolean"
           },
           "name": {
             "type": "string"
           },
-          "role": {
-            "enum": [
-              "admin",
-              "viewer"
-            ],
-            "type": "string"
+          "roleIds": {
+            "description": "Replace the user roles (local users only)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -2189,9 +2395,6 @@
             ],
             "type": "string"
           },
-          "canViewBodies": {
-            "type": "boolean"
-          },
           "createdAt": {
             "type": "string"
           },
@@ -2217,12 +2420,18 @@
           "pendingInvite": {
             "type": "boolean"
           },
-          "role": {
-            "enum": [
-              "admin",
-              "viewer"
-            ],
-            "type": "string"
+          "permissions": {
+            "description": "Effective permissions (union of roles); [\"*\"] = everything",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleRefDto"
+            },
+            "type": "array"
           },
           "totpEnrolled": {
             "type": "boolean"
@@ -2232,8 +2441,8 @@
           "id",
           "email",
           "name",
-          "role",
-          "canViewBodies",
+          "roles",
+          "permissions",
           "authSource",
           "totpEnrolled",
           "disabled",
@@ -2292,6 +2501,107 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/admin/account/totp/confirm": {
+      "post": {
+        "operationId": "accountTotpConfirm",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Confirm with a code from the app; 2FA is then required at every login.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/account/totp/disable": {
+      "post": {
+        "operationId": "accountTotpDisable",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Disable 2FA (requires the current password). Refused when TOTP_REQUIRED=true.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/account/totp/setup": {
+      "post": {
+        "operationId": "accountTotpSetup",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpEnrollDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Start enabling 2FA: returns a new TOTP secret + QR code (inactive until confirmed).",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/admin/audit": {
       "get": {
         "operationId": "adminListAudit",
@@ -2549,7 +2859,7 @@
             "description": ""
           }
         },
-        "summary": "Step 1: email + password. Sets a short-lived pre-MFA session cookie.",
+        "summary": "Email + password. Signs in directly (next=done) or sets a short-lived pre-MFA session when a TOTP code is needed.",
         "tags": [
           "auth"
         ]
@@ -3529,6 +3839,186 @@
           }
         ],
         "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/roles": {
+      "get": {
+        "operationId": "adminListRoles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "adminCreateRole",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoleDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Create a role. You can only grant permissions you hold.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/roles/permissions": {
+      "get": {
+        "operationId": "adminListPermissions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PermissionDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Permission catalog",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/roles/{id}": {
+      "delete": {
+        "operationId": "adminDeleteRole",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Delete a custom role (built-in roles cannot be deleted).",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "adminUpdateRole",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRoleDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Edit a role (not the built-in Admin). Changes apply immediately to every member.",
         "tags": [
           "admin"
         ]

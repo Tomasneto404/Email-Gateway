@@ -141,7 +141,8 @@ export function MessagesPage() {
 export function ApprovalsPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { id?: string; page?: number };
-  const { isAdmin } = useMe();
+  const { can } = useMe();
+  const canDecide = can('approvals:decide');
   const q: MessageListParams = { status: 'pending_approval', page: search.page ?? 1, pageSize: 50, sort: 'createdAt', order: 'asc' };
   const { data, isLoading } = useMessages(q, { refetchInterval: 10_000 });
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -152,7 +153,7 @@ export function ApprovalsPage() {
   const cols: Column<Message>[] = [
     ...baseCols.filter((c) => c.id !== 'status' && c.id !== 'outcome'),
     { id: 'age', header: 'Waiting', cell: (m) => <span className="text-muted-foreground text-xs">{fmtAgo(m.createdAt)}</span> },
-    ...(isAdmin
+    ...(canDecide
       ? [
           {
             id: 'actions',
@@ -179,7 +180,7 @@ export function ApprovalsPage() {
         title="Approvals"
         description="Messages from keys in approval mode. Approved messages are delivered live."
         actions={
-          isAdmin &&
+          canDecide &&
           selected.size > 0 && (
             <>
               <span className="text-muted-foreground text-xs">{selected.size} selected</span>
@@ -208,8 +209,8 @@ export function ApprovalsPage() {
         page={q.page}
         pageSize={q.pageSize}
         onPage={(page) => navigate({ to: '/approvals', search: { page } as never })}
-        selected={isAdmin ? selected : undefined}
-        onSelectedChange={isAdmin ? setSelected : undefined}
+        selected={canDecide ? selected : undefined}
+        onSelectedChange={canDecide ? setSelected : undefined}
         onRowClick={(m) => navigate({ to: '/approvals', search: { ...search, id: m.id } as never })}
         activeKey={search.id}
         empty={{ title: 'Inbox zero', description: 'Nothing is waiting for approval.' }}

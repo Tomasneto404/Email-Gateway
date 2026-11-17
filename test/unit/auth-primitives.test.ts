@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { neutralizeHtml, previewCsp } from '../../src/admin/admin.controllers';
-import { mapGroups } from '../../src/auth/authentik.service';
+import { groupsFromClaim } from '../../src/auth/authentik.service';
+import { covers, effectivePermissions, hasPermission, isValidPermission } from '../../src/auth/permissions';
 import { SecretBox } from '../../src/auth/crypto';
 import { base32Decode, base32Encode, hotp, otpauthUri, totp, verifyTotp } from '../../src/auth/totp';
 import { buildConfig } from '../../src/config/config';
@@ -53,15 +54,38 @@ describe('SecretBox', () => {
   });
 });
 
-describe('Authentik group mapping', () => {
-  const cfg = { AUTHENTIK_ADMIN_GROUP: 'mg-admins', AUTHENTIK_VIEWER_GROUP: 'mg-viewers', AUTHENTIK_BODIES_GROUP: 'mg-bodies' };
-  it('maps groups to roles; admin wins; no group = no access', () => {
-    expect(mapGroups(['mg-admins', 'mg-viewers'], cfg)).toEqual({ role: 'admin', canViewBodies: true });
-    expect(mapGroups(['mg-viewers'], cfg)).toEqual({ role: 'viewer', canViewBodies: false });
-    expect(mapGroups(['mg-viewers', 'mg-bodies'], cfg)).toEqual({ role: 'viewer', canViewBodies: true });
-    expect(mapGroups(['mg-bodies'], cfg)).toBeNull();
-    expect(mapGroups(undefined, cfg)).toBeNull();
-    expect(mapGroups('mg-admins', cfg)).toEqual({ role: 'admin', canViewBodies: true });
+describe('RBAC permission logic', () => {
+  it('groups claim normalisation', () => {
+    expect(groupsFromClaim(['a', 1, 'b'])).toEqual(['a', 'b']);
+    expect(groupsFromClaim('a')).toEqual(['a']);
+    expect(groupsFromClaim(undefined)).toEqual([]);
+  });
+  it('hasPermission: exact, area wildcard, global wildcard', () => {
+    expect(hasPermission(['keys:read'], 'keys:read')).toBe(true);
+    expect(hasPermission(['keys:read'], 'keys:rotate')).toBe(false);
+    expect(hasPermission(['keys:*'], 'keys:rotate')).toBe(true);
+    expect(hasPermission(['keys:*'], 'users:manage')).toBe(false);
+    expect(hasPermission(['*'], 'users:manage')).toBe(true);
+    expect(hasPermission(['keys:read'], 'keys:*')).toBe(false);
+  });
+  it('covers: anti-escalation', () => {
+    expect(covers(['*'], ['*'])).toBe(true);
+    expect(covers(['keys:*', 'messages:read'], ['keys:rotate', 'messages:read'])).toBe(true);
+    expect(covers(['keys:*'], ['keys:*'])).toBe(true);
+    expect(covers(['keys:read', 'keys:update'], ['keys:*'])).toBe(false);
+    expect(covers(['keys:*'], ['*'])).toBe(false);
+    expect(covers(['users:manage'], ['messages:bodies'])).toBe(false);
+  });
+  it('effective permissions = union; "*" collapses', () => {
+    expect(effectivePermissions([{ permissions: ['b', 'a'] }, { permissions: ['a', 'c'] }])).toEqual(['a', 'b', 'c']);
+    expect(effectivePermissions([{ permissions: ['keys:read'] }, { permissions: ['*'] }])).toEqual(['*']);
+  });
+  it('validates permission ids', () => {
+    expect(isValidPermission('keys:rotate')).toBe(true);
+    expect(isValidPermission('keys:*')).toBe(true);
+    expect(isValidPermission('*')).toBe(true);
+    expect(isValidPermission('keys:nuke')).toBe(false);
+    expect(isValidPermission('bogus:*')).toBe(false);
   });
   it('requires full Authentik config when enabled', () => {
     expect(() => buildConfig({ DATABASE_URL: 'x', AUTHENTIK_ENABLED: 'true' })).toThrow(/AUTHENTIK_ISSUER/);

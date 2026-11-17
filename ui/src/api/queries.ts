@@ -39,8 +39,8 @@ function useAction<TVars, TData>(fn: (v: TVars) => Promise<TData>, opts: { inval
 }
 
 // ---------------------------------------------------------------- dashboard
-export const useSystemState = () =>
-  useQuery({ queryKey: ['system'], queryFn: () => call(api.GET('/admin/stats/system')), refetchInterval: 10_000 });
+export const useSystemState = (enabled = true) =>
+  useQuery({ queryKey: ['system'], queryFn: () => call(api.GET('/admin/stats/system')), refetchInterval: 10_000, enabled });
 
 export const useStats = (q: { from?: string; to?: string; bucket?: 'hour' | 'day'; keyId?: string }) =>
   useQuery({
@@ -128,10 +128,10 @@ export const useReject = () =>
 
 // ---------------------------------------------------------------- users / audit / settings
 export const useUsers = () => useQuery({ queryKey: ['users'], queryFn: () => call(api.GET('/admin/users')) });
-export const useInviteUser = () => useAction((body: Schemas['InviteUserDto']) => call(api.POST('/admin/users', { body })), { invalidate: [['users']] });
+export const useInviteUser = () => useAction((body: Schemas['InviteUserDto']) => call(api.POST('/admin/users', { body })), { invalidate: [['users'], ['roles']] });
 export const useUpdateUser = () =>
   useAction((v: { id: string; body: Schemas['UpdateUserDto'] }) => call(api.PATCH('/admin/users/{id}', { params: { path: { id: v.id } }, body: v.body })), {
-    invalidate: [['users']],
+    invalidate: [['users'], ['roles'], ['session']],
     success: 'User updated',
   });
 export const useResetTotp = () =>
@@ -154,3 +154,18 @@ export interface AuditParams {
 export const useAudit = (q: AuditParams) =>
   useQuery({ queryKey: ['audit', q], queryFn: () => call(api.GET('/admin/audit', { params: { query: q } })), placeholderData: keepPreviousData });
 export const useSettings = () => useQuery({ queryKey: ['settings'], queryFn: () => call(api.GET('/admin/settings')), staleTime: 300_000 });
+
+// ---------------------------------------------------------------- roles (RBAC)
+export type RoleT = Schemas['RoleDto'];
+export const useRoles = () => useQuery({ queryKey: ['roles'], queryFn: () => call(api.GET('/admin/roles')) });
+export const usePermissionCatalog = () =>
+  useQuery({ queryKey: ['roles', 'catalog'], queryFn: () => call(api.GET('/admin/roles/permissions')), staleTime: Infinity });
+export const useCreateRole = () =>
+  useAction((body: Schemas['CreateRoleDto']) => call(api.POST('/admin/roles', { body })), { invalidate: [['roles'], ['users'], ['session']], success: 'Role created' });
+export const useUpdateRole = () =>
+  useAction((v: { id: string; body: Schemas['UpdateRoleDto'] }) => call(api.PATCH('/admin/roles/{id}', { params: { path: { id: v.id } }, body: v.body })), {
+    invalidate: [['roles'], ['users'], ['session']],
+    success: 'Role saved',
+  });
+export const useDeleteRole = () =>
+  useAction((id: string) => call(api.DELETE('/admin/roles/{id}', { params: { path: { id } } })), { invalidate: [['roles'], ['users'], ['session']], success: 'Role deleted' });

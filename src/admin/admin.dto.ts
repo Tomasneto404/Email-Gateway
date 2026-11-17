@@ -235,12 +235,16 @@ export class SystemStateDto {
   @ApiProperty({ type: CheckDto }) smtpHealth!: CheckDto;
 }
 
+export class RoleRefDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+}
 export class UserDto {
   @ApiProperty() id!: string;
   @ApiProperty() email!: string;
   @ApiProperty() name!: string;
-  @ApiProperty({ enum: ['admin', 'viewer'] }) role!: 'admin' | 'viewer';
-  @ApiProperty() canViewBodies!: boolean;
+  @ApiProperty({ type: [RoleRefDto] }) roles!: RoleRefDto[];
+  @ApiProperty({ type: [String], description: 'Effective permissions (union of roles); ["*"] = everything' }) permissions!: string[];
   @ApiProperty({ enum: ['local', 'authentik'] }) authSource!: string;
   @ApiProperty() totpEnrolled!: boolean;
   @ApiProperty() disabled!: boolean;
@@ -256,18 +260,51 @@ export class UserListDto {
 export class InviteUserDto {
   @ApiProperty() email!: string;
   @ApiPropertyOptional() name?: string;
-  @ApiProperty({ enum: ['admin', 'viewer'] }) role!: 'admin' | 'viewer';
-  @ApiPropertyOptional() canViewBodies?: boolean;
+  @ApiProperty({ type: [String], description: 'Role ids (at least one)' }) roleIds!: string[];
 }
 export class UpdateUserDto {
   @ApiPropertyOptional() name?: string;
-  @ApiPropertyOptional({ enum: ['admin', 'viewer'] }) role?: 'admin' | 'viewer';
-  @ApiPropertyOptional() canViewBodies?: boolean;
+  @ApiPropertyOptional({ type: [String], description: 'Replace the user roles (local users only)' }) roleIds?: string[];
   @ApiPropertyOptional() disabled?: boolean;
+}
+
+export class PermissionDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() area!: string;
+  @ApiProperty() label!: string;
+}
+export class RoleDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() description!: string;
+  @ApiProperty({ type: [String] }) permissions!: string[];
+  @ApiProperty({ type: [String], description: 'Authentik groups that grant this role on SSO login' }) ssoGroups!: string[];
+  @ApiProperty() builtin!: boolean;
+  @ApiProperty({ description: 'false for the built-in Admin role' }) editable!: boolean;
+  @ApiProperty() userCount!: number;
+  @ApiProperty() createdAt!: string;
+  @ApiProperty() updatedAt!: string;
+}
+export class RoleListDto {
+  @ApiProperty({ type: [RoleDto] }) items!: RoleDto[];
+  @ApiProperty() total!: number;
+}
+export class CreateRoleDto {
+  @ApiProperty() name!: string;
+  @ApiPropertyOptional() description?: string;
+  @ApiProperty({ type: [String], description: 'Permission ids, "<area>:*" or "*"' }) permissions!: string[];
+  @ApiPropertyOptional({ type: [String] }) ssoGroups?: string[];
+}
+export class UpdateRoleDto {
+  @ApiPropertyOptional() name?: string;
+  @ApiPropertyOptional() description?: string;
+  @ApiPropertyOptional({ type: [String] }) permissions?: string[];
+  @ApiPropertyOptional({ type: [String] }) ssoGroups?: string[];
 }
 export class InviteLinkDto {
   @ApiProperty({ description: 'Relative URL of the one-time invite page (shown once)' }) invitePath!: string;
   @ApiProperty() expiresInHours!: number;
+  @ApiProperty({ description: 'true when the link was queued for delivery by email (SYSTEM_MAIL_FROM + SMTP/Resend configured)' }) emailed!: boolean;
 }
 export class InviteResultDto extends InviteLinkDto {
   @ApiProperty({ type: UserDto }) user!: UserDto;
@@ -309,16 +346,20 @@ export class ResendSettingsDto {
 export class AuthentikSettingsDto {
   @ApiProperty() enabled!: boolean;
   @ApiProperty({ type: String, nullable: true }) issuer!: string | null;
-  @ApiProperty() adminGroup!: string;
-  @ApiProperty() viewerGroup!: string;
-  @ApiProperty() bodiesGroup!: string;
   @ApiProperty() scopes!: string;
+  @ApiProperty() groupsClaim!: string;
+}
+export class SystemMailSettingsDto {
+  @ApiProperty() enabled!: boolean;
+  @ApiProperty({ type: String, nullable: true }) from!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ['smtp', 'resend'] }) provider!: string | null;
 }
 export class SettingsDto {
   @ApiProperty({ enum: ['smtp', 'resend'] }) liveProvider!: string;
   @ApiProperty({ type: SmtpSettingsDto }) smtp!: SmtpSettingsDto;
   @ApiProperty({ type: ResendSettingsDto }) resend!: ResendSettingsDto;
   @ApiProperty() mailpitSmtp!: string;
+  @ApiProperty({ type: SystemMailSettingsDto }) systemMail!: SystemMailSettingsDto;
   @ApiProperty({ type: String, nullable: true }) mailpitUiUrl!: string | null;
   @ApiProperty() bodyRetentionDays!: number;
   @ApiProperty() recordRetentionDays!: number;
@@ -335,6 +376,7 @@ export class SettingsDto {
   @ApiProperty() maxRequestBytes!: number;
   @ApiProperty() trustProxy!: string;
   @ApiProperty() localLogin!: boolean;
+  @ApiProperty() totpRequired!: boolean;
   @ApiProperty() adminTokenEnabled!: boolean;
   @ApiProperty() sessionTtlHours!: number;
   @ApiProperty() sessionIdleMinutes!: number;

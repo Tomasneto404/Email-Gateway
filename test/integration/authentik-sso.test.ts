@@ -22,9 +22,6 @@ beforeAll(async () => {
       AUTHENTIK_CLIENT_ID: 'mail-gateway',
       AUTHENTIK_CLIENT_SECRET: 'secret',
       AUTHENTIK_ALLOW_INSECURE: 'true',
-      AUTHENTIK_ADMIN_GROUP: 'mg-admins',
-      AUTHENTIK_VIEWER_GROUP: 'mg-viewers',
-      AUTHENTIK_BODIES_GROUP: 'mg-bodies',
       PUBLIC_URL: 'http://127.0.0.1:1', // replaced below once the port is known
     },
     { worker: false },
@@ -55,37 +52,42 @@ async function ssoLogin(sub: string, email: string, groups: string[]) {
 
 describe('Authentik SSO', () => {
   it('advertises SSO on the login page config', async () => {
-    expect((await s.http.get('/admin/auth/config')).body).toEqual({ localLogin: true, authentik: true });
+    expect((await s.http.get('/admin/auth/config')).body).toEqual({ localLogin: true, authentik: true, totpRequired: false });
   });
 
   it('admin group → admin session (no local TOTP), audited', async () => {
     const email = `${uname('sso')}@corp.test`;
-    const { agent, cb } = await ssoLogin(`sub-${email}`, email, ['mg-admins']);
+    const { agent, cb } = await ssoLogin(`sub-${email}`, email, ['mail-gateway-admins']);
     expect(cb.status).toBe(200);
     const sess = await agent.get('/admin/auth/session');
-    expect(sess.body.user).toMatchObject({ email, role: 'admin', authSource: 'authentik', canViewBodies: true });
+    expect(sess.body.user).toMatchObject({ email, roles: [{ name: 'Admin' }], permissions: ['*'], authSource: 'authentik' });
     expect((await agent.get('/admin/users')).status).toBe(200);
     expect(await s.prisma.adminAudit.count({ where: { actorLabel: email, action: 'auth.login', outcome: 'success' } })).toBe(1);
   });
 
-  it('viewer group → viewer; role re-synced on next login; role not editable locally', async () => {
+  it('groups → roles (union); re-synced on every login; roles not editable locally', async () => {
     const email = `${uname('ssov')}@corp.test`;
     const sub = `sub-${email}`;
-    const first = await ssoLogin(sub, email, ['mg-viewers']);
-    expect((await first.agent.get('/admin/auth/session')).body.user).toMatchObject({ role: 'viewer', canViewBodies: false });
+    const first = await ssoLogin(sub, email, ['mail-gateway-viewers']);
+    const u1 = (await first.agent.get('/admin/auth/session')).body.user;
+    expect(u1.roles.map((r: { name: string }) => r.name)).toEqual(['Viewer']);
+    expect(u1.permissions).not.toContain('messages:bodies');
     expect((await first.agent.get('/admin/users')).status).toBe(403);
 
-    const second = await ssoLogin(sub, email, ['mg-viewers', 'mg-bodies']);
-    expect((await second.agent.get('/admin/auth/session')).body.user).toMatchObject({ role: 'viewer', canViewBodies: true });
-    const third = await ssoLogin(sub, email, ['mg-admins']);
-    expect((await third.agent.get('/admin/auth/session')).body.user.role).toBe('admin');
+    const second = await ssoLogin(sub, email, ['mail-gateway-viewers', 'mail-gateway-body-viewers']);
+    const u2 = (await second.agent.get('/admin/auth/session')).body.user;
+    expect(u2.roles.map((r: { name: string }) => r.name)).toEqual(['Body reader', 'Viewer']);
+    expect(u2.permissions).toContain('messages:bodies');
+    const third = await ssoLogin(sub, email, ['mail-gateway-admins']);
+    expect((await third.agent.get('/admin/auth/session')).body.user.permissions).toEqual(['*']);
     expect(await s.prisma.adminUser.count({ where: { oidcSubject: sub } })).toBe(1);
     expect(await s.prisma.adminAudit.count({ where: { action: 'user.role_synced', actorLabel: email } })).toBe(2);
 
     const csrf = (await third.agent.get('/admin/auth/session')).body.csrfToken;
     const user = await s.prisma.adminUser.findUniqueOrThrow({ where: { oidcSubject: sub } });
-    const edit = await third.agent.patch(`/admin/users/${user.id}`).set({ Origin: s.baseUrl, 'X-CSRF-Token': csrf }).send({ role: 'viewer' });
+    const edit = await third.agent.patch(`/admin/users/${user.id}`).set({ Origin: s.baseUrl, 'X-CSRF-Token': csrf }).send({ roleIds: ['Viewer'] });
     expect(edit.body.error.code).toBe('INVALID_STATE');
+    expect(edit.body.error.message).toMatch(/Authentik groups/);
   });
 
   it('no mapped group → access denied, nothing provisioned', async () => {
@@ -98,7 +100,7 @@ describe('Authentik SSO', () => {
   });
 
   it('callback with a forged/mismatched state is rejected (login CSRF)', async () => {
-    claims = { sub: 'x', email: 'x@corp.test', groups: ['mg-admins'] };
+    claims = { sub: 'x', email: 'x@corp.test', groups: ['mail-gateway-admins'] };
     const victim = request.agent(s.baseUrl);
     const attacker = request.agent(s.baseUrl);
     const start = await attacker.get('/admin/auth/authentik/login');
@@ -112,7 +114,7 @@ describe('Authentik SSO', () => {
 
   it('logout returns the Authentik end-session URL', async () => {
     const email = `${uname('sso-out')}@corp.test`;
-    const { agent } = await ssoLogin(`sub-${email}`, email, ['mg-admins']);
+    const { agent } = await ssoLogin(`sub-${email}`, email, ['mail-gateway-admins']);
     const out = await agent.post('/admin/auth/logout').set({ Origin: s.baseUrl }).send({});
     expect(out.body.redirect).toContain('id_token_hint=');
     expect((await agent.get('/admin/auth/session')).status).toBe(401);
@@ -122,8 +124,8 @@ describe('Authentik SSO', () => {
     const { UsersService } = await import('../../src/auth/users.service');
     const { CLI_ACTOR } = await import('../../src/admin/admin-audit.service');
     const email = `${uname('dup')}@corp.test`;
-    await s.api.get(UsersService).createLocal({ email, role: 'viewer', password: 'correct horse battery staple' }, CLI_ACTOR);
-    const { cb } = await ssoLogin(`sub-${email}`, email, ['mg-admins']);
+    await s.api.get(UsersService).createLocal({ email, roles: ['Viewer'], password: 'correct horse battery staple' }, CLI_ACTOR);
+    const { cb } = await ssoLogin(`sub-${email}`, email, ['mail-gateway-admins']);
     expect(cb.status).toBe(302);
     expect(decodeURIComponent(cb.headers.location)).toContain('local account');
   });

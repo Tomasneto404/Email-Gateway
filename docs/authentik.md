@@ -2,22 +2,26 @@
 
 The admin UI can sign people in with [Authentik](https://goauthentik.io) over OpenID Connect.
 The flow is authorization code + PKCE (S256), with `state` bound to a browser cookie and an ID-token `nonce`.
-Authentik group membership decides each user's role. Local password + TOTP accounts keep working as a
-break-glass path; set `LOCAL_LOGIN_ENABLED=false` to turn them off.
+Authentik group membership decides each user's **roles** (RBAC). Local accounts (password, optional TOTP)
+keep working as a break-glass path; set `LOCAL_LOGIN_ENABLED=false` to turn them off.
 
-| Authentik group (configurable) | Gateway role |
+Each role lists the Authentik groups that grant it, edited in the admin UI under **Roles › Authentik groups**.
+A user gets every role whose groups intersect theirs, and the permissions are the union. Defaults:
+
+| Authentik group | Gateway role |
 |---|---|
-| `mail-gateway-admins` (`AUTHENTIK_ADMIN_GROUP`) | `admin`: full control, sees message bodies |
-| `mail-gateway-viewers` (`AUTHENTIK_VIEWER_GROUP`) | `viewer`: read-only, message bodies hidden |
-| `mail-gateway-viewers` + `mail-gateway-body-viewers` (`AUTHENTIK_BODIES_GROUP`) | `viewer` who can read message bodies |
-| none of the above | **no access**; the login is refused and audited |
+| `mail-gateway-admins` | **Admin**: full access |
+| `mail-gateway-viewers` | **Viewer**: read-only, message bodies hidden |
+| `mail-gateway-body-viewers` | **Body reader**: adds access to message bodies |
+| none mapped | **no access**; the login is refused and audited |
 
-Admin wins if a user is in both groups.
+Map further groups to Operator, Approver, Auditor or your own roles from the UI.
 
 How SSO users behave:
 
-- **Provisioning.** A user is created on their first SSO login. Their role is re-synced on every login, and changes are audited as `user.role_synced`.
-- **Local edits.** Roles and body access of SSO users can't be edited in the UI; Authentik is the source of truth.
+- **Provisioning.** A user is created on their first SSO login. Their roles are re-synced from their groups on every login, and changes are audited as `user.role_synced`.
+- **Local edits.** The roles of SSO users can't be edited per user in the UI; Authentik groups are the source of truth.
+  Change the group mapping on the role instead.
   You can still disable them locally (kill switch), and that takes effect immediately.
 - **MFA.** SSO users don't get gateway TOTP. Enforce MFA in the Authentik flow instead.
 - **Account linking.** An SSO login is never linked to an existing local account with the same email, because that would allow account takeover.
@@ -38,7 +42,7 @@ How SSO users behave:
    - Provider: `mail-gateway`
    - Launch URL: `https://<PUBLIC_URL host>/ui/`
    - Bind the groups below under *Policy / Group / User Bindings* so that only they can use the app.
-3. **Directory → Groups**: create `mail-gateway-admins`, `mail-gateway-viewers` and, optionally, `mail-gateway-body-viewers`, then add people.
+3. **Directory → Groups**: create the groups you map to roles (by default `mail-gateway-admins`, `mail-gateway-viewers` and `mail-gateway-body-viewers`), then add people.
 
 If you use a custom property mapping, make sure the ID token contains `email` and a list-valued `groups` claim.
 The claim name is set by `AUTHENTIK_GROUPS_CLAIM`.
@@ -52,9 +56,6 @@ AUTHENTIK_ISSUER=https://authentik.example.com/application/o/mail-gateway/
 AUTHENTIK_CLIENT_ID=<client id>
 AUTHENTIK_CLIENT_SECRET=<client secret>            # or AUTHENTIK_CLIENT_SECRET_FILE=/run/secrets/authentik_client_secret
 # optional overrides
-AUTHENTIK_ADMIN_GROUP=mail-gateway-admins
-AUTHENTIK_VIEWER_GROUP=mail-gateway-viewers
-AUTHENTIK_BODIES_GROUP=mail-gateway-body-viewers
 AUTHENTIK_SCOPES=openid profile email
 AUTHENTIK_GROUPS_CLAIM=groups
 ```
@@ -71,7 +72,7 @@ AUTHENTIK_GROUPS_CLAIM=groups
 2. Sign in as a member of `mail-gateway-admins`. You should land on the dashboard, and **Admin users** should list you with source *Authentik SSO*.
 3. Sign in as a user without any mapped group. You should come back to the login page with "not in a mail-gateway group".
    The **Activity log** shows the refused `auth.login` with reason `no_mapped_group`.
-4. Move a user from viewers to admins in Authentik, then log in again. The role updates and `user.role_synced` is logged.
+4. Move a user from viewers to admins in Authentik, then log in again. Their roles update and `user.role_synced` is logged.
 
 ## Troubleshooting
 
@@ -84,5 +85,5 @@ AUTHENTIK_GROUPS_CLAIM=groups
 | Login works, but every change fails with `CSRF_FAILED` | `PUBLIC_URL` is unset or wrong behind a TLS-terminating proxy. The browser's Origin must match `PUBLIC_URL`. |
 
 Automated coverage: `test/integration/authentik-sso.test.ts` runs the whole flow against an Authentik-shaped
-mock issuer (`/application/o/<slug>/`) that sends a `groups` claim. It covers PKCE/nonce, group mapping,
-role re-sync, denial without a group, login CSRF, end-session and the local-account collision.
+mock issuer (`/application/o/<slug>/`) that sends a `groups` claim. It covers PKCE/nonce, group → role mapping
+(union of roles), role re-sync, denial without a group, login CSRF, end-session and the local-account collision.

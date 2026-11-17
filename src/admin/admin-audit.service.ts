@@ -9,12 +9,13 @@ export interface Actor {
   id?: string;
   label: string;
   ip?: string;
-  role?: 'admin' | 'viewer';
-  canViewBodies?: boolean;
+  /** effective RBAC permissions (see src/auth/permissions.ts) */
+  permissions?: string[];
 }
 
-export const SYSTEM_ACTOR: Actor = { type: 'system', label: 'system' };
-export const CLI_ACTOR: Actor = { type: 'cli', label: 'cli' };
+export const SYSTEM_ACTOR: Actor = { type: 'system', label: 'system', permissions: ['*'] };
+/** The CLI runs with shell access to the deployment, i.e. full control. */
+export const CLI_ACTOR: Actor = { type: 'cli', label: 'cli', permissions: ['*'] };
 
 export interface AuditEntry {
   action: string;

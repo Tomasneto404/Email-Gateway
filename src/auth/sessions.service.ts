@@ -2,14 +2,19 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { PrismaService } from '../common/prisma.service';
-import { AdminSession, AdminUser } from '../generated/prisma/client';
+import { AdminSession, AdminUser, Role } from '../generated/prisma/client';
+import { effectivePermissions } from './permissions';
 import { randomToken, sha256hex } from './crypto';
 
 const PARTIAL_TTL_MS = 10 * 60_000;
 
+export type UserWithRoles = AdminUser & { roles: Array<{ role: Role }> };
+
 export interface ResolvedSession {
   session: AdminSession;
-  user: AdminUser;
+  user: UserWithRoles;
+  /** effective RBAC permissions (union of the user's roles) */
+  permissions: string[];
 }
 
 /** Server-side sessions. The cookie holds a random token; the DB stores only its SHA-256. */
@@ -47,7 +52,10 @@ export class SessionsService {
   async resolve(token: string | undefined): Promise<ResolvedSession | null> {
     if (!token || token.length > 100) return null;
     const idHash = sha256hex(token);
-    const session = await this.prisma.adminSession.findUnique({ where: { idHash }, include: { user: true } });
+    const session = await this.prisma.adminSession.findUnique({
+      where: { idHash },
+      include: { user: { include: { roles: { include: { role: true } } } } },
+    });
     if (!session) return null;
     const now = Date.now();
     const idleExpired = session.mfaPassed && now - session.lastSeenAt.getTime() > this.cfg.SESSION_IDLE_MINUTES * 60_000;
@@ -59,7 +67,7 @@ export class SessionsService {
       await this.prisma.adminSession.update({ where: { idHash }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
     }
     const { user, ...s } = session;
-    return { session: s as AdminSession, user };
+    return { session: s as AdminSession, user, permissions: effectivePermissions(user.roles.map((r) => r.role)) };
   }
 
   /** Upgrade after MFA: issue a fresh session id (prevents session fixation). */

@@ -4,6 +4,57 @@
  */
 
 export interface paths {
+    "/admin/account/totp/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm with a code from the app; 2FA is then required at every login. */
+        post: operations["accountTotpConfirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/account/totp/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable 2FA (requires the current password). Refused when TOTP_REQUIRED=true. */
+        post: operations["accountTotpDisable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/account/totp/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start enabling 2FA: returns a new TOTP secret + QR code (inactive until confirmed). */
+        post: operations["accountTotpSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/audit": {
         parameters: {
             query?: never;
@@ -96,7 +147,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Step 1: email + password. Sets a short-lived pre-MFA session cookie. */
+        /** Email + password. Signs in directly (next=done) or sets a short-lived pre-MFA session when a TOTP code is needed. */
         post: operations["authLogin"];
         delete?: never;
         options?: never;
@@ -438,6 +489,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["adminListRoles"];
+        put?: never;
+        /** Create a role. You can only grant permissions you hold. */
+        post: operations["adminCreateRole"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/roles/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Permission catalog */
+        get: operations["adminListPermissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/roles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a custom role (built-in roles cannot be deleted). */
+        delete: operations["adminDeleteRole"];
+        options?: never;
+        head?: never;
+        /** Edit a role (not the built-in Admin). Changes apply immediately to every member. */
+        patch: operations["adminUpdateRole"];
+        trace?: never;
+    };
     "/admin/settings": {
         parameters: {
             query?: never;
@@ -669,14 +772,14 @@ export interface components {
         AuthConfigDto: {
             authentik: boolean;
             localLogin: boolean;
+            /** @description true when every local user must use TOTP */
+            totpRequired: boolean;
         };
         AuthentikSettingsDto: {
-            adminGroup: string;
-            bodiesGroup: string;
             enabled: boolean;
+            groupsClaim: string;
             issuer: string | null;
             scopes: string;
-            viewerGroup: string;
         };
         BreakerDto: {
             enabled: boolean;
@@ -738,6 +841,13 @@ export interface components {
             quotaPerDay?: number;
             quotaPerHour?: number;
         };
+        CreateRoleDto: {
+            description?: string;
+            name: string;
+            /** @description Permission ids, "<area>:*" or "*" */
+            permissions: string[];
+            ssoGroups?: string[];
+        };
         ErrorBodyDto: {
             /** @description Stable machine-readable code, e.g. RECIPIENT_NOT_ALLOWED, QUOTA_EXCEEDED, DUPLICATE_MESSAGE, KEY_DISABLED, GATEWAY_PAUSED. */
             code: string;
@@ -761,22 +871,25 @@ export interface components {
             email: string;
         };
         InviteLinkDto: {
+            /** @description true when the link was queued for delivery by email (SYSTEM_MAIL_FROM + SMTP/Resend configured) */
+            emailed: boolean;
             expiresInHours: number;
             /** @description Relative URL of the one-time invite page (shown once) */
             invitePath: string;
         };
         InviteResultDto: {
+            /** @description true when the link was queued for delivery by email (SYSTEM_MAIL_FROM + SMTP/Resend configured) */
+            emailed: boolean;
             expiresInHours: number;
             /** @description Relative URL of the one-time invite page (shown once) */
             invitePath: string;
             user: components["schemas"]["UserDto"];
         };
         InviteUserDto: {
-            canViewBodies?: boolean;
             email: string;
             name?: string;
-            /** @enum {string} */
-            role: "admin" | "viewer";
+            /** @description Role ids (at least one) */
+            roleIds: string[];
         };
         KeyCreatedDto: {
             key: components["schemas"]["KeyDto"];
@@ -855,8 +968,15 @@ export interface components {
             password: string;
         };
         LoginResultDto: {
-            /** @enum {string} */
-            next: "totp_enroll" | "totp_verify";
+            /** @description Present when next=done */
+            csrfToken?: string;
+            /**
+             * @description done: signed in (no 2FA for this user). totp_verify: enter the TOTP code. totp_enroll: 2FA is mandatory and must be set up now.
+             * @enum {string}
+             */
+            next: "done" | "totp_enroll" | "totp_verify";
+            /** @description Present when next=done */
+            user?: components["schemas"]["UserDto"];
         };
         LogoutDto: {
             /** @description Authentik end-session URL to visit, if any */
@@ -1025,6 +1145,11 @@ export interface components {
             /** @description Why the gateway is paused (shown in the UI and audit log). */
             reason?: string;
         };
+        PermissionDto: {
+            area: string;
+            id: string;
+            label: string;
+        };
         QueueDepthDto: {
             active: number;
             delayed: number;
@@ -1044,6 +1169,28 @@ export interface components {
         ResendSettingsDto: {
             enabled: boolean;
             webhookConfigured: boolean;
+        };
+        RoleDto: {
+            builtin: boolean;
+            createdAt: string;
+            description: string;
+            /** @description false for the built-in Admin role */
+            editable: boolean;
+            id: string;
+            name: string;
+            permissions: string[];
+            /** @description Authentik groups that grant this role on SSO login */
+            ssoGroups: string[];
+            updatedAt: string;
+            userCount: number;
+        };
+        RoleListDto: {
+            items: components["schemas"]["RoleDto"][];
+            total: number;
+        };
+        RoleRefDto: {
+            id: string;
+            name: string;
         };
         SendAcceptedDto: {
             /** @description Message id. Use GET /v1/messages/{id} to follow delivery. */
@@ -1123,6 +1270,8 @@ export interface components {
             sessionIdleMinutes: number;
             sessionTtlHours: number;
             smtp: components["schemas"]["SmtpSettingsDto"];
+            systemMail: components["schemas"]["SystemMailSettingsDto"];
+            totpRequired: boolean;
             trustProxy: string;
         };
         SmtpSettingsDto: {
@@ -1144,6 +1293,12 @@ export interface components {
             to: string;
             topKeys: components["schemas"]["TopKeyDto"][];
             totals: components["schemas"]["TotalsDto"];
+        };
+        SystemMailSettingsDto: {
+            enabled: boolean;
+            from: string | null;
+            /** @enum {string|null} */
+            provider: "smtp" | "resend" | null;
         };
         SystemStateDto: {
             breakers: components["schemas"]["BreakerDto"][];
@@ -1203,12 +1358,17 @@ export interface components {
             quotaPerDay?: number;
             quotaPerHour?: number;
         };
+        UpdateRoleDto: {
+            description?: string;
+            name?: string;
+            permissions?: string[];
+            ssoGroups?: string[];
+        };
         UpdateUserDto: {
-            canViewBodies?: boolean;
             disabled?: boolean;
             name?: string;
-            /** @enum {string} */
-            role?: "admin" | "viewer";
+            /** @description Replace the user roles (local users only) */
+            roleIds?: string[];
         };
         UsageDto: {
             /** @description Current UTC day. */
@@ -1224,7 +1384,6 @@ export interface components {
         UserDto: {
             /** @enum {string} */
             authSource: "local" | "authentik";
-            canViewBodies: boolean;
             createdAt: string;
             disabled: boolean;
             email: string;
@@ -1233,8 +1392,9 @@ export interface components {
             locked: boolean;
             name: string;
             pendingInvite: boolean;
-            /** @enum {string} */
-            role: "admin" | "viewer";
+            /** @description Effective permissions (union of roles); ["*"] = everything */
+            permissions: string[];
+            roles: components["schemas"]["RoleRefDto"][];
             totpEnrolled: boolean;
         };
         UserListDto: {
@@ -1250,6 +1410,71 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    accountTotpConfirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDto"];
+                };
+            };
+        };
+    };
+    accountTotpDisable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDto"];
+                };
+            };
+        };
+    };
+    accountTotpSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpEnrollDto"];
+                };
+            };
+        };
+    };
     adminListAudit: {
         parameters: {
             query?: {
@@ -1908,6 +2133,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageActionDto"];
+                };
+            };
+        };
+    };
+    adminListRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleListDto"];
+                };
+            };
+        };
+    };
+    adminCreateRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRoleDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleDto"];
+                };
+            };
+        };
+    };
+    adminListPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionDto"][];
+                };
+            };
+        };
+    };
+    adminDeleteRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminUpdateRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRoleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleDto"];
                 };
             };
         };
