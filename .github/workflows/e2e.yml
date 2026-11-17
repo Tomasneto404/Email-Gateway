@@ -52,7 +52,7 @@ jobs:
       MG_BASE_URL: http://127.0.0.1:3000
       MG_CLI: node dist/cli.js
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

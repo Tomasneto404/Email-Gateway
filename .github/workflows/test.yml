@@ -29,7 +29,7 @@ jobs:
       MG_TEST_SERVICES: external
       TEST_REDIS_URL: redis://127.0.0.1:6379
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -104,7 +104,7 @@ jobs:
       TEST_LIVE_SMTP_PORT: "2025"
       TEST_LIVE_API: http://127.0.0.1:9025
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
