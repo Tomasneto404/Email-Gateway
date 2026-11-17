@@ -92,7 +92,7 @@ export function RecipientChipsInput({ value, onChange, disabled, id }: Props) {
           {error}
         </p>
       ) : value.length === 0 ? (
-        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Empty allow-list: this key cannot send to anyone.</p>
+        <p className="text-warning-foreground mt-1 text-xs">Empty allow-list: this key cannot send to anyone</p>
       ) : null}
     </div>
   );

@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react';
 import { api, call, setCsrfToken } from '@/api/client';
 import { usePauseGateway, useResumeGateway, useSystemState } from '@/api/queries';
 import { TwoFactorDialog } from '@/components/account/two-factor-dialog';
+import { Dot } from '@/components/common/badges';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -42,23 +43,26 @@ export const NAV = [
   { to: '/settings', label: 'Settings', icon: Settings, key: 'g s', perms: ['settings:read'] },
 ] as const;
 
+/**
+ * The signal light: the gateway's state, always in view at the top of the sidebar.
+ * Running = steady green, paused = amber, paused by a tripped breaker = red.
+ */
 export function GatewayPill() {
   const { can } = useMe();
   const { data } = useSystemState(can('dashboard:read'));
   if (!data) return null;
   const open = data.breakers.some((b) => b.state === 'open');
+  const tone = !data.gateway.paused ? 'green' : open ? 'red' : 'amber';
   return (
-    <span
+    <Link
+      to="/"
       data-testid="gateway-pill"
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
-        data.gateway.paused ? 'bg-red-500/12 text-red-700 dark:text-red-300' : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
-      )}
-      title={data.gateway.reason ?? undefined}
+      className="text-secondary-foreground hover:text-foreground inline-flex items-center gap-2 text-xs"
+      title={data.gateway.paused ? (data.gateway.reason ?? 'Paused') : 'Accepting and delivering mail'}
     >
-      <span className="size-1.5 rounded-full bg-current" />
-      {data.gateway.paused ? (open ? 'Paused · breaker open' : 'Paused') : 'Running'}
-    </span>
+      <Dot tone={tone} className={tone === 'green' ? 'shadow-[0_0_0_3px] shadow-positive/15' : tone === 'red' ? 'shadow-[0_0_0_3px] shadow-destructive/15' : 'shadow-[0_0_0_3px] shadow-warning/15'} />
+      {data.gateway.paused ? (open ? 'Breaker open' : 'Paused') : 'Running'}
+    </Link>
   );
 }
 
@@ -116,31 +120,36 @@ export function AppShell() {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      <aside className="bg-sidebar hidden w-56 shrink-0 flex-col border-r md:flex">
-        <div className="flex h-12 items-center gap-2 px-4 font-semibold tracking-tight">
-          <Mail className="text-primary size-4" /> mail-gateway
+      <aside className="bg-sidebar hidden w-60 shrink-0 flex-col border-r md:flex">
+        <div className="flex h-14 items-center justify-between gap-2 px-5">
+          <span className="text-[15px] font-medium">mail-gateway</span>
+          <GatewayPill />
         </div>
         <button
           onClick={() => setCmd(true)}
-          className="text-muted-foreground hover:bg-accent mx-3 mb-2 flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs"
+          className="text-muted-foreground hover:text-foreground bg-card mx-3 mb-4 flex h-8 items-center gap-2 rounded-md border px-2 text-sm shadow-[var(--shadow-sm)] transition-colors"
         >
-          <Search className="size-3.5" /> Search…
-          <kbd className="bg-muted ml-auto rounded px-1 font-mono text-[10px]">⌘K</kbd>
+          <Search className="size-4" strokeWidth={1.5} /> Search
+          <kbd className="text-muted-foreground ml-auto rounded-sm border px-1 font-mono text-xs leading-4">⌘K</kbd>
         </button>
-        <nav className="grid gap-0.5 px-2">
+        <nav className="grid gap-0.5 px-3">
           {nav.map((n) => (
             <Link
               key={n.to}
               to={n.to}
               className={cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-                isActive(n.to) ? 'bg-accent text-foreground font-medium' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                'flex h-8 items-center gap-2.5 rounded-md px-2 text-sm transition-colors',
+                isActive(n.to)
+                  ? 'bg-sidebar-active text-foreground shadow-[var(--shadow-sm)] ring-border ring-1'
+                  : 'text-secondary-foreground hover:bg-sidebar-active/60 hover:text-foreground',
               )}
             >
-              <n.icon className="size-4" />
+              <n.icon className={cn('size-4', isActive(n.to) ? 'text-foreground' : 'text-muted-foreground')} strokeWidth={1.5} />
               {n.label}
               {n.to === '/approvals' && !!sys?.pendingApprovals && (
-                <span className="bg-primary text-primary-foreground ml-auto rounded-full px-1.5 text-[10px] font-semibold tabular">{sys.pendingApprovals}</span>
+                <span className="text-brand ml-auto font-mono text-xs tabular" aria-label={`${sys.pendingApprovals} pending`}>
+                  {sys.pendingApprovals}
+                </span>
               )}
             </Link>
           ))}
@@ -149,17 +158,17 @@ export function AppShell() {
           href="/docs"
           target="_blank"
           rel="noreferrer"
-          className="text-muted-foreground hover:bg-accent/60 hover:text-foreground mx-2 mt-auto flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+          className="text-secondary-foreground hover:bg-sidebar-active/60 hover:text-foreground mx-3 mt-auto mb-2 flex h-8 items-center gap-2.5 rounded-md px-2 text-sm transition-colors"
         >
-          <BookOpen className="size-4" /> API docs
+          <BookOpen className="text-muted-foreground size-4" strokeWidth={1.5} /> API docs
         </a>
-        <div className="border-t p-2">
+        <div className="border-t p-3">
           <DropdownMenu>
-            <DropdownMenuTrigger className="hover:bg-accent flex w-full items-center gap-2 rounded-md p-2 text-left text-sm">
-              <span className="bg-primary/15 text-primary grid size-6 place-items-center rounded-full text-xs font-semibold uppercase">{user?.email[0]}</span>
+            <DropdownMenuTrigger className="hover:bg-sidebar-active/60 flex w-full items-center gap-2.5 rounded-md p-2 text-left text-sm transition-colors">
+              <span className="bg-card text-secondary-foreground grid size-7 place-items-center rounded-full border text-xs font-medium uppercase">{user?.email[0]}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-xs font-medium" data-testid="current-user">{user?.email}</span>
-                <span className="text-muted-foreground block truncate text-[11px]" data-testid="current-roles">
+                <span className="text-muted-foreground block truncate text-xs" data-testid="current-roles">
                   {user?.roles.map((r) => r.name).join(', ') || 'no roles'}
                 </span>
               </span>
@@ -178,7 +187,7 @@ export function AppShell() {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setTwoFactor(true)}>
                 <ShieldCheck className="size-4" /> Two-factor authentication
-                {user?.authSource === 'local' && !user.totpEnrolled && <span className="text-muted-foreground ml-auto text-[11px]">off</span>}
+                {user?.authSource === 'local' && !user.totpEnrolled && <span className="text-muted-foreground ml-auto text-xs">off</span>}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>
@@ -190,8 +199,8 @@ export function AppShell() {
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-3 border-b px-6 md:hidden">
-          <Mail className="text-primary size-4" />
-          <span className="font-semibold">mail-gateway</span>
+          <span className="font-medium">mail-gateway</span>
+          <GatewayPill />
           <div className="ml-auto flex gap-1">
             {nav.map((n) => (
               <Link key={n.to} to={n.to} className="text-muted-foreground p-1.5" aria-label={n.label}>
@@ -206,7 +215,7 @@ export function AppShell() {
       </main>
 
       <CommandDialog open={cmd} onOpenChange={setCmd}>
-        <CommandInput placeholder="Jump to… or run a command" />
+        <CommandInput placeholder="Go to or run" />
         <CommandList>
           <CommandEmpty>No results.</CommandEmpty>
           <CommandGroup heading="Navigate">
@@ -219,7 +228,7 @@ export function AppShell() {
                 }}
               >
                 <n.icon className="size-4" /> {n.label}
-                <span className="text-muted-foreground ml-auto font-mono text-[10px]">{n.key}</span>
+                <span className="text-muted-foreground ml-auto font-mono text-xs">{n.key}</span>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -241,7 +250,7 @@ export function AppShell() {
                     setConfirmPause(true);
                   }}
                 >
-                  <PauseCircle className="size-4" /> Pause gateway…
+                  <PauseCircle className="size-4" /> Pause gateway
                 </CommandItem>
               )}
             </CommandGroup>
@@ -265,7 +274,7 @@ export function PauseDialog({ open, onOpenChange, onConfirm }: { open: boolean; 
       open={open}
       onOpenChange={onOpenChange}
       title="Pause the gateway?"
-      description="All API sends will be rejected with GATEWAY_PAUSED and queued deliveries stop until you resume."
+      description="New sends are rejected with GATEWAY_PAUSED and queued deliveries wait until you resume"
       confirmLabel="Pause gateway"
       destructive
       reasonLabel="Reason (shown in the activity log)"

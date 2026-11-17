@@ -1,30 +1,63 @@
 import { cn } from '@/lib/utils';
 
-const tone = {
-  gray: 'bg-muted text-muted-foreground',
-  blue: 'bg-blue-500/12 text-blue-700 dark:text-blue-300',
-  green: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
-  red: 'bg-red-500/12 text-red-700 dark:text-red-300',
-  amber: 'bg-amber-500/15 text-amber-800 dark:text-amber-300',
-  violet: 'bg-violet-500/12 text-violet-700 dark:text-violet-300',
+/**
+ * Signal lights. State is a small dot plus plain text; colour lives only in the dot.
+ *   solid  = the state is reached        ring = the state is waiting / was stopped before sending
+ */
+const DOT = {
+  gray: 'bg-muted-foreground/60',
+  brand: 'bg-brand',
+  green: 'bg-positive',
+  red: 'bg-destructive',
+  amber: 'bg-warning',
 } as const;
+const RING = {
+  gray: 'ring-muted-foreground/70',
+  brand: 'ring-brand',
+  green: 'ring-positive',
+  red: 'ring-destructive',
+  amber: 'ring-warning',
+} as const;
+type Tone = keyof typeof DOT;
 
-export function Pill({ children, color = 'gray', className, dot }: { children: React.ReactNode; color?: keyof typeof tone; className?: string; dot?: boolean }) {
+export function Dot({ tone = 'gray', hollow, className }: { tone?: Tone; hollow?: boolean; className?: string }) {
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium whitespace-nowrap', tone[color], className)}>
-      {dot && <span className="size-1.5 rounded-full bg-current" />}
+    <span
+      aria-hidden
+      className={cn('inline-block size-2 shrink-0 rounded-full', hollow ? cn('ring-[1.5px] ring-inset', RING[tone]) : DOT[tone], className)}
+    />
+  );
+}
+
+/** A state: dot + text, no box. */
+export function Signal({ tone = 'gray', hollow, children, className }: { tone?: Tone; hollow?: boolean; children: React.ReactNode; className?: string }) {
+  return (
+    <span className={cn('inline-flex items-center gap-2 whitespace-nowrap', className)}>
+      <Dot tone={tone} hollow={hollow} />
       {children}
     </span>
   );
 }
 
-const STATUS: Record<string, keyof typeof tone> = {
-  queued: 'blue',
-  pending_approval: 'amber',
-  sent: 'green',
-  captured: 'violet',
-  failed: 'red',
-  rejected: 'red',
+/** A quiet tag (role names, sources, flags): hairline box, secondary text, optional signal dot. */
+export function Pill({ children, color = 'gray', className, dot }: { children: React.ReactNode; color?: Tone | 'blue' | 'violet'; className?: string; dot?: boolean }) {
+  const tone: Tone = color === 'blue' || color === 'violet' ? 'brand' : color;
+  const showDot = dot ?? tone !== 'gray';
+  return (
+    <span className={cn('text-secondary-foreground inline-flex h-5 items-center gap-1.5 rounded-sm border px-1.5 text-xs whitespace-nowrap', className)}>
+      {showDot && <Dot tone={tone} className="size-1.5" />}
+      {children}
+    </span>
+  );
+}
+
+const STATUS: Record<string, { tone: Tone; hollow?: boolean }> = {
+  queued: { tone: 'gray', hollow: true },
+  pending_approval: { tone: 'amber', hollow: true },
+  sent: { tone: 'green' },
+  captured: { tone: 'gray' },
+  failed: { tone: 'red' },
+  rejected: { tone: 'red', hollow: true },
 };
 export const STATUS_LABEL: Record<string, string> = {
   queued: 'Queued',
@@ -34,21 +67,36 @@ export const STATUS_LABEL: Record<string, string> = {
   failed: 'Failed',
   rejected: 'Rejected',
 };
+export function StatusDot({ status }: { status: string }) {
+  const s = STATUS[status] ?? { tone: 'gray' as Tone };
+  return <Dot tone={s.tone} hollow={s.hollow} />;
+}
 export function StatusBadge({ status }: { status: string }) {
+  const s = STATUS[status] ?? { tone: 'gray' as Tone };
   return (
-    <Pill color={STATUS[status] ?? 'gray'} dot>
+    <Signal tone={s.tone} hollow={s.hollow} className={status === 'failed' ? 'text-destructive' : undefined}>
       {STATUS_LABEL[status] ?? status}
-    </Pill>
+    </Signal>
   );
 }
 
-const MODE: Record<string, keyof typeof tone> = { sandbox: 'violet', live: 'green', approval: 'amber' };
+/** live = real mail leaves (cobalt, the postmark), approval = held for a human, sandbox = captured only. */
+const MODE: Record<string, { tone: Tone; hollow?: boolean }> = { live: { tone: 'brand' }, approval: { tone: 'amber', hollow: true }, sandbox: { tone: 'gray', hollow: true } };
+export function ModeDot({ mode }: { mode: string }) {
+  const m = MODE[mode] ?? { tone: 'gray' as Tone };
+  return <Dot tone={m.tone} hollow={m.hollow} />;
+}
 export function ModeBadge({ mode }: { mode: string }) {
-  return <Pill color={MODE[mode] ?? 'gray'}>{mode}</Pill>;
+  const m = MODE[mode] ?? { tone: 'gray' as Tone };
+  return (
+    <Signal tone={m.tone} hollow={m.hollow} className="text-secondary-foreground">
+      {mode}
+    </Signal>
+  );
 }
 
-const OUTCOME: Record<string, keyof typeof tone> = { delivered: 'green', delayed: 'amber', bounced: 'red', complained: 'red' };
+const OUTCOME: Record<string, Tone> = { delivered: 'green', delayed: 'amber', bounced: 'red', complained: 'red' };
 export function OutcomeBadge({ outcome }: { outcome: string | null }) {
   if (!outcome) return null;
-  return <Pill color={OUTCOME[outcome] ?? 'gray'}>{outcome}</Pill>;
+  return <Signal tone={OUTCOME[outcome] ?? 'gray'}>{outcome}</Signal>;
 }

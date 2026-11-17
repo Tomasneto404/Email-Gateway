@@ -2,9 +2,9 @@ import { Link } from '@tanstack/react-router';
 import { MailCheck, MoreHorizontal, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { useDeleteUser, useInviteUser, useResetAccess, useResetTotp, useRoles, useUpdateUser, useUsers, type User } from '@/api/queries';
-import { Pill } from '@/components/common/badges';
+import { Pill, Signal } from '@/components/common/badges';
 import { exportUrl } from '@/components/common/export-menu';
-import { CopyButton, Field, PageHeader } from '@/components/common/page';
+import { CopyButton, Field, PageHeader, Callout } from '@/components/common/page';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
 import { DataTable, type Column } from '@/components/data-table/data-table';
 import { Button } from '@/components/ui/button';
@@ -24,12 +24,9 @@ function InviteLink({ path, hours, emailed, email }: { path: string; hours: numb
   return (
     <div className="grid min-w-0 gap-3">
       {emailed ? (
-        <div data-testid="invite-emailed" className="flex items-start gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-300">
-          <MailCheck className="mt-0.5 size-4 shrink-0" />
-          <span>
-            Invitation emailed{email ? <> to <b>{email}</b></> : null}. The link is valid for {hours}h and can be used once.
-          </span>
-        </div>
+        <Callout data-testid="invite-emailed" tone="ok" icon={<MailCheck />}>
+          Invitation emailed{email ? <> to <span className="font-medium">{email}</span></> : null}. The link is valid for {hours}h and can be used once.
+        </Callout>
       ) : (
         <p className="text-sm">
           Share this one-time link with the user (valid {hours}h, shown once). They choose a password and can then sign in.
@@ -67,13 +64,13 @@ function RolePicker({ value, onChange }: { value: string[]; onChange: (ids: stri
             />
             <span className="min-w-0">
               <span className="font-medium">{r.name}</span>
-              {r.permissions.includes('*') && <Pill color="violet" className="ml-1.5">full access</Pill>}
+              {r.permissions.includes('*') && <Pill className="ml-1.5">full access</Pill>}
               {r.description && <span className="text-muted-foreground block text-xs">{r.description}</span>}
             </span>
           </label>
         );
       })}
-      <Link to="/roles" className="text-primary px-2 pt-1 text-xs hover:underline">
+      <Link to="/roles" className="text-brand px-2 pt-1 text-sm hover:underline">
         Manage roles →
       </Link>
     </div>
@@ -121,7 +118,7 @@ function InviteDialog() {
                   <Input id="u-name" value={name} onChange={(e) => setName(e.target.value)} />
                 </Field>
               </div>
-              <Field label="Roles" hint="Permissions are the union of all selected roles.">
+              <Field label="Roles" hint="Permissions are the union of all selected roles">
                 <RolePicker value={roleIds} onChange={setRoleIds} />
               </Field>
             </div>
@@ -197,7 +194,7 @@ export function UsersPage() {
       header: 'Roles',
       cell: (u) => (
         <span className="flex flex-wrap gap-1">
-          {u.roles.length ? u.roles.map((r) => <Pill key={r.id} color={r.name === 'Admin' ? 'violet' : 'gray'}>{r.name}</Pill>) : <span className="text-muted-foreground text-xs">none</span>}
+          {u.roles.length ? u.roles.map((r) => <Pill key={r.id}>{r.name}</Pill>) : <span className="text-muted-foreground text-xs">none</span>}
         </span>
       ),
     },
@@ -205,15 +202,23 @@ export function UsersPage() {
       id: 'source',
       header: 'Sign-in',
       cell: (u) =>
-        u.authSource === 'authentik' ? <Pill color="blue">Authentik SSO</Pill> : <Pill color={u.totpEnrolled ? 'green' : 'gray'}>{u.totpEnrolled ? 'password + 2FA' : 'password'}</Pill>,
+        <span className="text-secondary-foreground">{u.authSource === 'authentik' ? 'Authentik SSO' : u.totpEnrolled ? 'Password + 2FA' : 'Password'}</span>,
     },
     {
       id: 'state',
       header: 'Status',
       cell: (u) =>
-        u.disabled ? <Pill color="red">disabled</Pill> : u.locked ? <Pill color="amber">locked</Pill> : u.pendingInvite ? <Pill color="amber">invited</Pill> : <Pill color="green">active</Pill>,
+        u.disabled ? (
+          <Signal tone="red" className="text-destructive">disabled</Signal>
+        ) : u.locked ? (
+          <Signal tone="amber">locked</Signal>
+        ) : u.pendingInvite ? (
+          <Signal tone="amber" hollow className="text-secondary-foreground">invited</Signal>
+        ) : (
+          <Signal tone="green" className="text-secondary-foreground">active</Signal>
+        ),
     },
-    { id: 'last', header: 'Last sign-in', cell: (u) => <span className="text-muted-foreground text-xs">{fmtAgo(u.lastLoginAt)}</span> },
+    { id: 'last', header: 'Last sign-in', cell: (u) => <span className="text-secondary-foreground" title={u.lastLoginAt ?? undefined}>{fmtAgo(u.lastLoginAt)}</span> },
     {
       id: 'actions',
       header: '',
@@ -287,7 +292,7 @@ export function UsersPage() {
 
   return (
     <>
-      <PageHeader title="Admin users" description="Who can manage the gateway, and with which roles." actions={manage && <InviteDialog />} />
+      <PageHeader title="Admin users" description="Who can manage the gateway, and with which roles" actions={manage && <InviteDialog />} />
       <DataTable columns={cols} rows={data?.items} rowKey={(u) => u.id} loading={isLoading} total={data?.total} empty={{ title: 'No users' }} />
       {editRoles && <EditRolesDialog user={editRoles} onClose={() => setEditRoles(null)} />}
       {c && (

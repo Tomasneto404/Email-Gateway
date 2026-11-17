@@ -14,11 +14,11 @@ import {
   type Key,
   type KeyListParams,
 } from '@/api/queries';
-import { ModeBadge, Pill, StatusBadge } from '@/components/common/badges';
+import { ModeBadge, Pill, STATUS_LABEL, Signal, StatusDot } from '@/components/common/badges';
 import { exportUrl } from '@/components/common/export-menu';
 import { EmptyState, PageHeader } from '@/components/common/page';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
-import { Legend, VolumeChart } from '@/components/dashboard/charts';
+import { VolumeChart } from '@/components/dashboard/charts';
 import { DataTable, type Column } from '@/components/data-table/data-table';
 import { CreateKeyWizard } from '@/components/keys/create-key-wizard';
 import { PolicyEditor } from '@/components/keys/policy-editor';
@@ -39,10 +39,10 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
   const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 100;
   return (
     <div className="flex items-center gap-2">
-      <div className="bg-muted h-1.5 w-20 overflow-hidden rounded-full">
-        <div className={cn('h-full rounded-full', pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-primary')} style={{ width: `${pct}%` }} />
+      <div className="bg-muted h-1 w-16 overflow-hidden rounded-full">
+        <div className={cn('h-full rounded-full', pct >= 90 ? 'bg-destructive' : pct >= 70 ? 'bg-warning' : 'bg-foreground/35')} style={{ width: `${Math.max(pct, used > 0 ? 3 : 0)}%` }} />
       </div>
-      <span className="tabular text-muted-foreground text-xs">
+      <span className="tabular text-secondary-foreground font-mono text-xs">
         {fmtNum(used)}/{fmtNum(limit)}
       </span>
     </div>
@@ -65,23 +65,23 @@ export function KeysPage() {
       cell: (k) => (
         <div className="min-w-0">
           <div className="font-medium">{k.name}</div>
-          <div className="text-muted-foreground font-mono text-[11px]">{k.keyPrefix}</div>
+          <div className="text-muted-foreground font-mono text-xs">{k.keyPrefix}</div>
         </div>
       ),
     },
     { id: 'mode', header: 'Mode', cell: (k) => <ModeBadge mode={k.mode} /> },
-    { id: 'enabled', header: 'Status', cell: (k) => (k.enabled ? <Pill color="green" dot>enabled</Pill> : <Pill color="red" dot>disabled</Pill>) },
-    { id: 'from', header: 'From', cell: (k) => <span className="text-muted-foreground text-xs">{k.fromAddress}</span> },
+    { id: 'enabled', header: 'Status', cell: (k) => (k.enabled ? <Signal tone="green" className="text-secondary-foreground">enabled</Signal> : <Signal tone="red" className="text-destructive">disabled</Signal>) },
+    { id: 'from', header: 'From', cell: (k) => <span className="text-secondary-foreground">{k.fromAddress}</span> },
     { id: 'today', header: 'Today', cell: (k) => <UsageBar used={k.usage.day} limit={k.quotaPerDay} /> },
     { id: 'hour', header: 'This hour', cell: (k) => <UsageBar used={k.usage.hour} limit={k.quotaPerHour} /> },
-    { id: 'lastUsedAt', header: 'Last used', sortable: true, cell: (k) => <span className="text-muted-foreground text-xs">{fmtAgo(k.lastUsedAt)}</span> },
+    { id: 'lastUsedAt', header: 'Last used', sortable: true, cell: (k) => <span className="text-secondary-foreground" title={k.lastUsedAt ?? undefined}>{fmtAgo(k.lastUsedAt)}</span> },
   ];
 
   return (
     <>
-      <PageHeader title="API keys" description="Each key carries its own sending policy." actions={can('keys:create') && <CreateKeyWizard />} />
-      <div className="flex flex-wrap items-center gap-2 border-b px-6 py-2">
-        <Input placeholder="Filter by name…" className="h-8 w-56" defaultValue={search.q} onChange={(e) => set({ q: e.target.value || undefined })} />
+      <PageHeader title="API keys" description="Each key carries its own sending policy" actions={can('keys:create') && <CreateKeyWizard />} />
+      <div className="flex flex-wrap items-center gap-2 border-b px-8 py-3">
+        <Input placeholder="Filter by name" className="h-8 w-56" defaultValue={search.q} onChange={(e) => set({ q: e.target.value || undefined })} />
         <Segmented
           label="Mode filter"
           size="sm"
@@ -131,10 +131,10 @@ export function KeyDetailPage() {
   const stats = useStats({ keyId, from, bucket: 'hour' });
   const recent = useMessages({ keyId, pageSize: 10 });
 
-  if (error) return <EmptyState title="Key not found" description="It may have been deleted." />;
+  if (error) return <EmptyState title="Key not found" description="It may have been deleted" />;
   if (isLoading || !k)
     return (
-      <div className="grid gap-3 p-6">
+      <div className="grid gap-3 px-8 py-6">
         <Skeleton className="h-6 w-60" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -144,19 +144,21 @@ export function KeyDetailPage() {
     <>
       <PageHeader
         title={
-          <span className="flex items-center gap-2">
-            <Link to="/keys" className="text-muted-foreground hover:text-foreground" aria-label="Back to keys">
+          <span className="flex items-center gap-3">
+            <Link to="/keys" className="text-muted-foreground hover:text-foreground -ml-1 rounded-sm p-1" aria-label="Back to keys">
               <ArrowLeft className="size-4" />
             </Link>
             {k.name}
-            <ModeBadge mode={k.mode} />
+            <span className="text-sm font-normal">
+              <ModeBadge mode={k.mode} />
+            </span>
             {!k.enabled && <Pill color="red">disabled</Pill>}
           </span>
         }
         description={
           <>
             <span className="font-mono text-xs">{k.keyPrefix}</span> · created {fmtShort(k.createdAt)} · last used {fmtAgo(k.lastUsedAt)}
-            {k.prefixStale && <span className="ml-2 text-amber-600 dark:text-amber-400">Prefix no longer matches the mode — rotate to get a {k.mode === 'sandbox' ? 'mk_sbx_' : 'mk_live_'} key.</span>}
+            {k.prefixStale && <span className="text-warning-foreground ml-2">Prefix no longer matches the mode, rotate to get a {k.mode === 'sandbox' ? 'mk_sbx_' : 'mk_live_'} key</span>}
           </>
         }
         actions={
@@ -244,10 +246,10 @@ export function KeyDetailPage() {
           </>
         }
       />
-      <div className="grid w-full max-w-7xl gap-6 p-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid w-full max-w-[1440px] gap-6 px-8 py-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Policy</CardTitle>
+            <CardTitle>Policy</CardTitle>
           </CardHeader>
           <CardContent>
             <PolicyEditor
@@ -263,35 +265,48 @@ export function KeyDetailPage() {
         <div className="grid content-start gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">Last 24h</CardTitle>
-              <Legend />
+              <CardTitle>Last 24 hours</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-muted-foreground mb-2 flex gap-4 text-xs">
-                <span>
-                  Hour <b className="text-foreground tabular">{k.usage.hour}</b>/{k.quotaPerHour}
-                </span>
-                <span>
-                  Day <b className="text-foreground tabular">{k.usage.day}</b>/{k.quotaPerDay}
-                </span>
-              </div>
-              <VolumeChart series={stats.data?.series} bucket="hour" height={160} />
+              <dl className="mb-4 grid grid-cols-2 gap-4">
+                <div>
+                  <dt className="text-secondary-foreground text-xs">This hour</dt>
+                  <dd className="tabular mt-1 text-xl leading-7 font-medium">
+                    {fmtNum(k.usage.hour)}
+                    <span className="text-muted-foreground text-sm font-normal"> / {fmtNum(k.quotaPerHour)}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-secondary-foreground text-xs">Today</dt>
+                  <dd className="tabular mt-1 text-xl leading-7 font-medium">
+                    {fmtNum(k.usage.day)}
+                    <span className="text-muted-foreground text-sm font-normal"> / {fmtNum(k.quotaPerDay)}</span>
+                  </dd>
+                </div>
+              </dl>
+              <VolumeChart series={stats.data?.series} bucket="hour" height={180} />
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">Recent messages</CardTitle>
-              <Link to="/messages" search={{ keyId }} className="text-primary text-xs hover:underline">
+              <CardTitle>Recent messages</CardTitle>
+              <Link to="/messages" search={{ keyId }} className="text-brand text-sm hover:underline">
                 View all
               </Link>
             </CardHeader>
-            <CardContent className="grid gap-1">
-              {recent.data?.items.length === 0 && <p className="text-muted-foreground text-sm">No messages yet.</p>}
+            <CardContent className="grid gap-0.5">
+              {recent.data?.items.length === 0 && <p className="text-muted-foreground text-sm">No messages yet</p>}
               {recent.data?.items.map((m) => (
-                <Link key={m.id} to="/messages" search={{ keyId, id: m.id }} className="hover:bg-accent -mx-2 flex items-center gap-2 rounded px-2 py-1.5 text-sm">
-                  <StatusBadge status={m.status} />
-                  <span className="min-w-0 flex-1 truncate">{m.subject || '(no subject)'}</span>
-                  <span className="text-muted-foreground shrink-0 text-xs">{fmtAgo(m.createdAt)}</span>
+                <Link
+                  key={m.id}
+                  to="/messages"
+                  search={{ keyId, id: m.id }}
+                  title={STATUS_LABEL[m.status]}
+                  className="hover:bg-accent -mx-2 grid h-9 grid-cols-[8px_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 text-sm transition-colors"
+                >
+                  <StatusDot status={m.status} />
+                  <span className={cn('truncate', m.status === 'failed' && 'text-destructive')}>{m.subject || '(no subject)'}</span>
+                  <span className="text-muted-foreground tabular font-mono text-xs">{fmtShort(m.createdAt)}</span>
                 </Link>
               ))}
             </CardContent>
@@ -317,7 +332,7 @@ export function KeyDetailPage() {
         open={dialog === 'disable'}
         onOpenChange={(o) => !o && setDialog(null)}
         title={`Disable "${k.name}"?`}
-        description="Every send with this key will be rejected with KEY_DISABLED until it is re-enabled."
+        description="Every send with this key will be rejected with KEY_DISABLED until it is re-enabled"
         confirmLabel="Disable key"
         destructive
         typeToConfirm={k.name}

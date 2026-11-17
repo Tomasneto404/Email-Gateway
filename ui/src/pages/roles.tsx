@@ -159,7 +159,7 @@ function RoleEditor({ role, open, onOpenChange }: EditorProps) {
                           aria-label={p.id}
                         />
                         <span>
-                          <span className="text-foreground font-mono text-[11px]">{p.id.split(':')[1]}</span> — {p.label}
+                          <span className="text-foreground font-mono text-xs">{p.id.split(':')[1]}</span> — {p.label}
                           {!grantable(p.id) && <Lock className="ml-1 inline size-3" aria-label="You do not hold this permission" />}
                         </span>
                       </label>
@@ -170,7 +170,7 @@ function RoleEditor({ role, open, onOpenChange }: EditorProps) {
             </div>
           </div>
 
-          <Field label="Authentik groups" htmlFor="role-groups" hint="Members of any of these groups get this role when they sign in with SSO.">
+          <Field label="Authentik groups" htmlFor="role-groups" hint="Members of any of these groups get this role when they sign in with SSO">
             <TagInput id="role-groups" value={groups} onChange={setGroups} disabled={readOnly} />
           </Field>
         </div>
@@ -209,17 +209,17 @@ export function RolesPage() {
     {
       id: 'perms',
       header: 'Permissions',
-      className: 'max-w-[420px]',
+      className: 'max-w-md',
       cell: (r) =>
         r.permissions.includes('*') ? (
-          <Pill color="violet">full access</Pill>
+          <Pill>full access</Pill>
         ) : (
-          <span className="text-muted-foreground block truncate font-mono text-[11px]" title={r.permissions.join(', ')}>
+          <span className="text-muted-foreground block truncate font-mono text-xs" title={r.permissions.join(', ')}>
             {r.permissions.join(' · ') || '—'}
           </span>
         ),
     },
-    { id: 'groups', header: 'Authentik groups', cell: (r) => <span className="text-muted-foreground text-xs">{r.ssoGroups.join(', ') || '—'}</span> },
+    { id: 'groups', header: 'Authentik groups', cell: (r) => <span className="text-secondary-foreground font-mono text-xs">{r.ssoGroups.join(', ') || '—'}</span> },
     { id: 'users', header: 'Users', className: 'tabular', cell: (r) => r.userCount },
     {
       id: 'actions',
@@ -247,7 +247,7 @@ export function RolesPage() {
     <>
       <PageHeader
         title="Roles"
-        description="Role-based access control: each role is a set of permissions; users can hold several roles."
+        description="Role-based access control: each role is a set of permissions; users can hold several roles"
         actions={
           can('roles:manage') && (
             <Button size="sm" onClick={() => setEditing('new')}>

@@ -1,32 +1,36 @@
 import { ExternalLink } from 'lucide-react';
 import { useSettings } from '@/api/queries';
-import { Pill } from '@/components/common/badges';
+import { Signal } from '@/components/common/badges';
 import { KV, PageHeader } from '@/components/common/page';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fmtBytes } from '@/lib/format';
 
-const onOff = (b: boolean) => <Pill color={b ? 'green' : 'gray'}>{b ? 'enabled' : 'disabled'}</Pill>;
+const onOff = (b: boolean) => (
+  <Signal tone={b ? 'green' : 'gray'} hollow={!b} className={b ? undefined : 'text-secondary-foreground'}>
+    {b ? 'enabled' : 'disabled'}
+  </Signal>
+);
 
 export function SettingsPage() {
   const { data: s } = useSettings();
   return (
     <>
-      <PageHeader title="Settings" description="Effective configuration (read-only; change it through environment variables). Secrets are never shown." />
+      <PageHeader title="Settings" description="Effective configuration, read-only. Change it through environment variables; secrets are never shown" />
       {!s ? (
-        <div className="p-6">
+        <div className="px-8 py-6">
           <Skeleton className="h-48 w-full" />
         </div>
       ) : (
-        <div className="grid gap-4 p-6 lg:grid-cols-2">
+        <div className="grid w-full max-w-[1440px] gap-4 px-8 py-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Live delivery</CardTitle>
+              <CardTitle>Live delivery</CardTitle>
             </CardHeader>
             <CardContent>
               <KV
                 items={[
-                  ['Default provider', <Pill color="violet">{s.liveProvider}</Pill>],
+                  ['Default provider', <span className="font-mono text-xs">{s.liveProvider}</span>],
                   ['SMTP', onOff(s.smtp.enabled)],
                   ['SMTP target', s.smtp.host ? <span className="font-mono text-xs">{`${s.smtp.host}:${s.smtp.port}`}</span> : '—'],
                   ['TLS', s.smtp.secure ? 'implicit TLS' : s.smtp.requireTls ? 'STARTTLS required' : 'opportunistic'],
@@ -37,7 +41,7 @@ export function SettingsPage() {
                     'System email (invites)',
                     s.systemMail.enabled ? (
                       <span className="text-xs">
-                        <Pill color="green">enabled</Pill> {s.systemMail.from} via {s.systemMail.provider}
+                        <Signal tone="green">enabled</Signal> {s.systemMail.from} via {s.systemMail.provider}
                       </span>
                     ) : (
                       <span className="text-muted-foreground text-xs">off: set SYSTEM_MAIL_FROM</span>
@@ -49,7 +53,7 @@ export function SettingsPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Sandbox</CardTitle>
+              <CardTitle>Sandbox</CardTitle>
             </CardHeader>
             <CardContent>
               <KV
@@ -58,7 +62,7 @@ export function SettingsPage() {
                   [
                     'Mailpit UI',
                     s.mailpitUiUrl ? (
-                      <a href={s.mailpitUiUrl} target="_blank" rel="noreferrer" className="text-primary inline-flex items-center gap-1 hover:underline">
+                      <a href={s.mailpitUiUrl} target="_blank" rel="noreferrer" className="text-brand inline-flex items-center gap-1 hover:underline">
                         {s.mailpitUiUrl} <ExternalLink className="size-3" />
                       </a>
                     ) : (
@@ -71,7 +75,7 @@ export function SettingsPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Guardrails</CardTitle>
+              <CardTitle>Guardrails</CardTitle>
             </CardHeader>
             <CardContent>
               <KV
@@ -90,7 +94,7 @@ export function SettingsPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Retention & access</CardTitle>
+              <CardTitle>Retention & access</CardTitle>
             </CardHeader>
             <CardContent>
               <KV
@@ -99,7 +103,7 @@ export function SettingsPage() {
                   ['Audit records', `${s.recordRetentionDays} days`],
                   ['Retention job', <span className="font-mono text-xs">{s.retentionCron} (UTC)</span>],
                   ['Local login', onOff(s.localLogin)],
-                  ['Two-factor (TOTP)', s.totpRequired ? <Pill color="green">required</Pill> : <Pill>optional</Pill>],
+                  ['Two-factor (TOTP)', s.totpRequired ? 'required for local users' : 'optional, per user'],
                   ['Static admin token', onOff(s.adminTokenEnabled)],
                   ['Session', `${s.sessionTtlHours} h max · ${s.sessionIdleMinutes} min idle`],
                   ['Authentik SSO', onOff(s.authentik.enabled)],

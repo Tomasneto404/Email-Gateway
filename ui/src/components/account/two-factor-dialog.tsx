@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { api, call, errorMessage, type Schemas } from '@/api/client';
 import { useAuthConfig } from '@/api/queries';
-import { Pill } from '@/components/common/badges';
+import { Signal } from '@/components/common/badges';
 import { CopyButton, Field } from '@/components/common/page';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -57,7 +57,7 @@ export function TwoFactorDialog({ open, onOpenChange }: { open: boolean; onOpenC
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Two-factor authentication
-            {!sso && (user.totpEnrolled ? <Pill color="green" dot>enabled</Pill> : <Pill dot>off</Pill>)}
+            {!sso && (user.totpEnrolled ? <Signal tone="green">enabled</Signal> : <Signal hollow className="text-secondary-foreground">off</Signal>)}
           </DialogTitle>
           <DialogDescription>
             {sso
@@ -135,7 +135,7 @@ export function TwoFactorDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 });
               }}
             >
-              <Field label="Current password" htmlFor="totp-disable-pw" hint="Required to turn two-factor off." error={error ?? undefined}>
+              <Field label="Current password" htmlFor="totp-disable-pw" hint="Required to turn two-factor off" error={error ?? undefined}>
                 <Input id="totp-disable-pw" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </Field>
               <DialogFooter>

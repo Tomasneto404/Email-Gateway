@@ -5,10 +5,10 @@ import { cn } from '@/lib/utils';
 
 export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b px-6 py-4">
+    <div className="flex min-h-20 flex-wrap items-center justify-between gap-3 border-b px-8 py-4">
       <div className="min-w-0">
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
-        {description && <p className="text-muted-foreground mt-0.5 text-sm">{description}</p>}
+        <h1 className="text-xl leading-7 font-medium">{title}</h1>
+        {description && <p className="text-secondary-foreground text-sm">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>
@@ -17,10 +17,10 @@ export function PageHeader({ title, description, actions }: { title: ReactNode; 
 
 export function EmptyState({ title, description, icon, className }: { title: string; description?: string; icon?: ReactNode; className?: string }) {
   return (
-    <div className={cn('text-muted-foreground flex flex-col items-center justify-center gap-2 py-14 text-center', className)}>
-      <div className="bg-muted rounded-full p-3">{icon ?? <Inbox className="size-5" />}</div>
+    <div className={cn('text-muted-foreground flex flex-col items-center justify-center gap-2 py-16 text-center', className)}>
+      <div className="mb-1 grid size-10 place-items-center rounded-lg border">{icon ?? <Inbox className="size-4" strokeWidth={1.5} />}</div>
       <div className="text-foreground text-sm font-medium">{title}</div>
-      {description && <div className="max-w-sm text-sm">{description}</div>}
+      {description && <div className="text-secondary-foreground max-w-sm text-sm">{description}</div>}
     </div>
   );
 }
@@ -61,13 +61,31 @@ export function Field({ label, children, hint, error, htmlFor }: { label: ReactN
 
 export function KV({ items }: { items: Array<[ReactNode, ReactNode]> }) {
   return (
-    <dl className="grid grid-cols-[minmax(110px,auto)_1fr] gap-x-4 gap-y-2 text-sm">
+    <dl className="grid grid-cols-[minmax(112px,auto)_1fr] gap-x-6 gap-y-2 text-sm">
       {items.map(([k, v], i) => (
         <div key={i} className="contents">
-          <dt className="text-muted-foreground">{k}</dt>
+          <dt className="text-secondary-foreground">{k}</dt>
           <dd className="min-w-0 break-words">{v}</dd>
         </div>
       ))}
     </dl>
+  );
+}
+
+/** A quiet notice: hairline box on the raised surface, the signal colour only on the icon's edge bar. */
+export function Callout({ tone = 'info', icon, children, className, ...rest }: { tone?: 'info' | 'warn' | 'ok'; icon?: ReactNode; children: ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      {...rest}
+      className={cn(
+        'bg-muted/50 relative flex items-start gap-3 overflow-hidden rounded-lg border py-3 pr-3 pl-4 text-sm',
+        'before:absolute before:inset-y-0 before:left-0 before:w-0.5',
+        tone === 'warn' ? 'before:bg-warning' : tone === 'ok' ? 'before:bg-positive' : 'before:bg-brand',
+        className,
+      )}
+    >
+      {icon && <span className={cn('mt-0.5 shrink-0 [&_svg]:size-4', tone === 'warn' ? 'text-warning-foreground' : tone === 'ok' ? 'text-positive' : 'text-brand')}>{icon}</span>}
+      <div className="min-w-0">{children}</div>
+    </div>
   );
 }

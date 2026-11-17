@@ -4,34 +4,34 @@ import { ExportMenu } from '@/components/common/export-menu';
 import { useMe } from '@/lib/auth';
 import { X } from 'lucide-react';
 import type { Schemas } from '@/api/client';
-import { Pill } from '@/components/common/badges';
+import { Pill, Signal } from '@/components/common/badges';
 import { PageHeader } from '@/components/common/page';
 import { DataTable, type Column } from '@/components/data-table/data-table';
 import { Input } from '@/components/ui/input';
-import { fmtDate } from '@/lib/format';
+import { fmtTime } from '@/lib/format';
 
 type Entry = Schemas['AuditEntryDto'];
 
 const cols: Column<Entry>[] = [
-  { id: 'at', header: 'Time', cell: (a) => <span className="text-muted-foreground text-xs whitespace-nowrap">{fmtDate(a.at)}</span> },
+  { id: 'at', header: 'Time', cell: (a) => <span className="text-secondary-foreground tabular font-mono text-xs whitespace-nowrap" title={a.at}>{fmtTime(a.at)}</span> },
   {
     id: 'actor',
     header: 'Actor',
     cell: (a) => (
-      <span className="flex items-center gap-1.5 text-xs">
-        <Pill>{a.actorType}</Pill>
-        {a.actorLabel}
+      <span className="flex items-center gap-2">
+        {a.actorType === 'user' ? a.actorLabel : <span className="text-secondary-foreground font-mono text-xs">{a.actorLabel}</span>}
+        {a.actorType !== 'user' && a.actorType !== a.actorLabel && <Pill>{a.actorType}</Pill>}
       </span>
     ),
   },
   { id: 'action', header: 'Action', cell: (a) => <span className="font-mono text-xs">{a.action}</span> },
-  { id: 'outcome', header: 'Outcome', cell: (a) => <Pill color={a.outcome === 'success' ? 'green' : 'red'}>{a.outcome}</Pill> },
+  { id: 'outcome', header: 'Outcome', cell: (a) => (a.outcome === 'success' ? <Signal tone="green" className="text-secondary-foreground">{a.outcome}</Signal> : <Signal tone="red" className="text-destructive">{a.outcome}</Signal>) },
   {
     id: 'details',
     header: 'Details',
-    className: 'max-w-[420px]',
+    className: 'max-w-md',
     cell: (a) => (
-      <span className="text-muted-foreground block truncate font-mono text-[11px]" title={a.details ? JSON.stringify(a.details) : ''}>
+      <span className="text-muted-foreground block truncate font-mono text-xs" title={a.details ? JSON.stringify(a.details) : ''}>
         {a.targetType ? `${a.targetType}:${a.targetId?.slice(-8) ?? ''} ` : ''}
         {a.details ? JSON.stringify(a.details) : ''}
       </span>
@@ -42,7 +42,7 @@ const cols: Column<Entry>[] = [
 
 function ScopeChip({ label, value, onClear }: { label: string; value: string; onClear: () => void }) {
   return (
-    <span data-testid="scope-chip" className="bg-primary/10 text-primary inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium">
+    <span data-testid="scope-chip" className="bg-card inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-sm">
       {label}: {value}
       <button type="button" aria-label={`Clear ${label} filter`} onClick={onClear} className="hover:text-foreground">
         <X className="size-3.5" />
@@ -67,7 +67,7 @@ export function ActivityPage() {
     <>
       <PageHeader
         title="Activity log"
-        description="Every administrative action and sign-in attempt."
+        description="Every administrative action and sign-in attempt"
         actions={
           <ExportMenu
             path="/admin/audit/export.csv"
@@ -75,7 +75,7 @@ export function ActivityPage() {
           />
         }
       />
-      <div className="flex flex-wrap items-center gap-2 border-b px-6 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-b px-8 py-3">
         <select aria-label="Action" className={sel} value={search.action ?? ''} onChange={(e) => set({ action: e.target.value || undefined })}>
           <option value="">All actions</option>
           {data?.actions.map((a) => (
@@ -95,7 +95,7 @@ export function ActivityPage() {
           <option value="success">success</option>
           <option value="failure">failure</option>
         </select>
-        <Input placeholder="Actor contains…" className="h-8 w-52" defaultValue={search.actor} onChange={(e) => set({ actor: e.target.value || undefined })} />
+        <Input placeholder="Actor" className="h-8 w-52" defaultValue={search.actor} onChange={(e) => set({ actor: e.target.value || undefined })} />
         {search.actorId && <ScopeChip label="User" value={userLabel ?? search.actorId.slice(0, 8)} onClear={() => set({ actorId: undefined })} />}
         {search.keyId && <ScopeChip label="API key" value={keyLabel ?? search.keyId.slice(0, 8)} onClear={() => set({ keyId: undefined })} />}
       </div>

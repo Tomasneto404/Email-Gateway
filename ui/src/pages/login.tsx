@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { KeyRound, Mail, ShieldCheck } from 'lucide-react';
+import { KeyRound, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ApiError, api, call, errorMessage, setCsrfToken, type Schemas } from '@/api/client';
 import { useAuthConfig } from '@/api/queries';
@@ -12,14 +12,14 @@ type Step = { kind: 'credentials' } | { kind: 'enroll'; data?: Schemas['TotpEnro
 
 export function AuthCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-muted/30 grid min-h-dvh place-items-center p-4">
-      <div className="bg-card w-full max-w-sm rounded-xl border p-6 shadow-sm">
-        <div className="mb-5 flex items-center gap-2 font-semibold">
-          <Mail className="text-primary size-5" /> mail-gateway
+    <div className="bg-background grid min-h-dvh place-items-center px-4 py-16">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 text-[15px] font-medium">mail-gateway</div>
+        <div className="bg-card rounded-xl border p-6 shadow-[0_8px_24px_rgb(0_0_0/0.06)]">
+          <h1 className="text-xl leading-7 font-medium">{title}</h1>
+          {subtitle && <p className="text-secondary-foreground mt-1 text-sm">{subtitle}</p>}
+          <div className="mt-6">{children}</div>
         </div>
-        <h1 className="text-lg font-semibold">{title}</h1>
-        {subtitle && <p className="text-muted-foreground mt-1 text-sm">{subtitle}</p>}
-        <div className="mt-5">{children}</div>
       </div>
     </div>
   );
@@ -75,7 +75,7 @@ export function LoginPage() {
 
   if (step.kind === 'credentials') {
     return (
-      <AuthCard title="Sign in" subtitle="Administrators only.">
+      <AuthCard title="Sign in" subtitle="Administrators only">
         <form
           className="grid gap-4"
           onSubmit={(e) => {
@@ -197,7 +197,7 @@ export function InvitePage({ token }: { token: string }) {
           }
         }}
       >
-        <Field label="New password" htmlFor="pw" hint="At least 12 characters.">
+        <Field label="New password" htmlFor="pw" hint="At least 12 characters">
           <Input id="pw" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} disabled={!email} />
         </Field>
         <Field label="Repeat password" htmlFor="pw2">

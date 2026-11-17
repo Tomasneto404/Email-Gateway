@@ -54,7 +54,7 @@ export function DataTable<T>(p: Props<T>) {
           <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
               {selectable && (
-                <TableHead className="w-8 pl-6">
+                <TableHead className="w-8 pl-8">
                   <Checkbox
                     aria-label="Select all"
                     checked={allSelected}
@@ -63,7 +63,7 @@ export function DataTable<T>(p: Props<T>) {
                 </TableHead>
               )}
               {p.columns.map((c, i) => (
-                <TableHead key={c.id} className={cn('text-xs', i === 0 && !selectable && 'pl-6', c.className)}>
+                <TableHead key={c.id} className={cn(i === 0 && !selectable && 'pl-8', i === p.columns.length - 1 && 'pr-8', c.className)}>
                   {c.sortable && p.onSort ? (
                     <button
                       type="button"
@@ -71,7 +71,7 @@ export function DataTable<T>(p: Props<T>) {
                       onClick={() => p.onSort!(c.id, p.sort === c.id && p.order === 'desc' ? 'asc' : 'desc')}
                     >
                       {c.header}
-                      {p.sort === c.id ? p.order === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" /> : <ChevronsUpDown className="size-3 opacity-40" />}
+                      {p.sort === c.id ? p.order === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" /> : <ChevronsUpDown className="size-3.5 opacity-40" />}
                     </button>
                   ) : (
                     c.header
@@ -84,9 +84,9 @@ export function DataTable<T>(p: Props<T>) {
             {p.loading && !p.rows
               ? Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
-                    {selectable && <TableCell className="pl-6" />}
+                    {selectable && <TableCell className="pl-8" />}
                     {p.columns.map((c, j) => (
-                      <TableCell key={c.id} className={cn(j === 0 && !selectable && 'pl-6')}>
+                      <TableCell key={c.id} className={cn(j === 0 && !selectable && 'pl-8')}>
                         <Skeleton className="h-4 w-full max-w-40" />
                       </TableCell>
                     ))}
@@ -102,12 +102,12 @@ export function DataTable<T>(p: Props<T>) {
                       onClick={() => p.onRowClick?.(r)}
                     >
                       {selectable && (
-                        <TableCell className="pl-6" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="pl-8" onClick={(e) => e.stopPropagation()}>
                           <Checkbox aria-label="Select row" checked={p.selected?.has(id)} onCheckedChange={() => toggle(id)} />
                         </TableCell>
                       )}
                       {p.columns.map((c, j) => (
-                        <TableCell key={c.id} className={cn('py-2', j === 0 && !selectable && 'pl-6', c.className)}>
+                        <TableCell key={c.id} className={cn(j === 0 && !selectable && 'pl-8', j === p.columns.length - 1 && 'pr-8', c.className)}>
                           {c.cell(r)}
                         </TableCell>
                       ))}
@@ -119,16 +119,16 @@ export function DataTable<T>(p: Props<T>) {
         {!p.loading && rows.length === 0 && <EmptyState title={p.empty?.title ?? 'Nothing here'} description={p.empty?.description} />}
       </div>
       {p.onPage && p.total !== undefined && (
-        <div className="text-muted-foreground flex items-center justify-between border-t px-6 py-2 text-xs">
+        <div className="text-muted-foreground flex h-12 shrink-0 items-center justify-between border-t px-8 text-xs">
           <span className="tabular">{fmtNum(p.total)} total</span>
           <div className="flex items-center gap-2">
             <span className="tabular">
               Page {p.page ?? 1} of {pages}
             </span>
-            <Button variant="outline" size="icon" className="size-7" aria-label="Previous page" disabled={(p.page ?? 1) <= 1} onClick={() => p.onPage!((p.page ?? 1) - 1)}>
+            <Button variant="outline" size="icon" className="size-8" aria-label="Previous page" disabled={(p.page ?? 1) <= 1} onClick={() => p.onPage!((p.page ?? 1) - 1)}>
               <ChevronLeft className="size-4" />
             </Button>
-            <Button variant="outline" size="icon" className="size-7" aria-label="Next page" disabled={(p.page ?? 1) >= pages} onClick={() => p.onPage!((p.page ?? 1) + 1)}>
+            <Button variant="outline" size="icon" className="size-8" aria-label="Next page" disabled={(p.page ?? 1) >= pages} onClick={() => p.onPage!((p.page ?? 1) + 1)}>
               <ChevronRight className="size-4" />
             </Button>
           </div>

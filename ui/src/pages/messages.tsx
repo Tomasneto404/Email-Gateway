@@ -2,7 +2,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Check, X } from 'lucide-react';
 import { useState } from 'react';
 import { useApprove, useKeys, useMessages, useReject, type Message, type MessageListParams } from '@/api/queries';
-import { ModeBadge, OutcomeBadge, Pill, STATUS_LABEL, StatusBadge } from '@/components/common/badges';
+import { ModeDot, OutcomeBadge, Pill, STATUS_LABEL, StatusBadge } from '@/components/common/badges';
 import { ExportMenu } from '@/components/common/export-menu';
 import { PageHeader } from '@/components/common/page';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useMe } from '@/lib/auth';
 import { fmtAgo, fmtShort } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 export type MessagesSearch = MessageListParams & { id?: string };
 
@@ -26,27 +27,28 @@ const baseCols: Column<Message>[] = [
     id: 'subject',
     header: 'Subject',
     sortable: true,
-    className: 'max-w-[360px]',
+    className: 'max-w-md',
     cell: (m) => (
-      <div className="min-w-0">
-        <div className="truncate font-medium">{m.subject || <span className="text-muted-foreground">(no subject)</span>}</div>
-        {m.rejectCode && <div className="text-destructive font-mono text-[11px]">{m.rejectCode}</div>}
+      <div className="flex min-w-0 items-baseline gap-3">
+        <span className="truncate">{m.subject || <span className="text-muted-foreground">(no subject)</span>}</span>
+        {m.rejectCode && <span className="text-muted-foreground shrink-0 font-mono text-xs">{m.rejectCode}</span>}
       </div>
     ),
   },
-  { id: 'to', header: 'Recipients', cell: (m) => <span className="text-muted-foreground text-xs">{recipients(m)}</span> },
+  { id: 'to', header: 'Recipients', cell: (m) => <span className="text-secondary-foreground">{recipients(m)}</span> },
   {
     id: 'key',
     header: 'Key',
     cell: (m) => (
-      <span className="flex items-center gap-1.5 text-xs">
-        {m.apiKey.name} <ModeBadge mode={m.deliveryMode} />
-        {m.source === 'admin_test' && <Pill color="blue">test</Pill>}
+      <span className="flex items-center gap-2" title={`${m.deliveryMode} mode`}>
+        <ModeDot mode={m.deliveryMode} />
+        <span className="font-mono text-xs">{m.apiKey.name}</span>
+        {m.source === 'admin_test' && <Pill>test</Pill>}
       </span>
     ),
   },
   { id: 'outcome', header: '', cell: (m) => <OutcomeBadge outcome={m.deliveryOutcome} /> },
-  { id: 'createdAt', header: 'Created', sortable: true, cell: (m) => <span className="text-muted-foreground text-xs whitespace-nowrap" title={m.createdAt}>{fmtShort(m.createdAt)}</span> },
+  { id: 'createdAt', header: 'Created', sortable: true, cell: (m) => <span className="text-secondary-foreground tabular font-mono text-xs whitespace-nowrap" title={m.createdAt}>{fmtShort(m.createdAt)}</span> },
 ];
 
 export function MessagesPage() {
@@ -63,7 +65,7 @@ export function MessagesPage() {
     <>
       <PageHeader
         title="Messages"
-        description="Every request after authentication: accepted or rejected."
+        description="Every request after authentication: accepted or rejected"
         actions={
           <ExportMenu
             path="/admin/messages/export.csv"
@@ -71,12 +73,12 @@ export function MessagesPage() {
           />
         }
       />
-      <div className="flex flex-wrap items-center gap-2 border-b px-6 py-2">
-        <Input placeholder="Subject contains…" className="h-8 w-52" defaultValue={filters.subject} onChange={(e) => set({ subject: e.target.value || undefined })} />
+      <div className="flex flex-wrap items-center gap-2 border-b px-8 py-3">
+        <Input placeholder="Subject" className="h-8 w-52" defaultValue={filters.subject} onChange={(e) => set({ subject: e.target.value || undefined })} />
         <Input placeholder="Recipient (exact)" className="h-8 w-52" defaultValue={filters.recipient} onBlur={(e) => set({ recipient: e.target.value.trim() || undefined })} />
         <select
           aria-label="Key"
-          className="border-input h-8 rounded-md border bg-transparent px-2 text-sm"
+          className="border-input bg-card h-8 rounded-md border px-2.5 text-sm"
           value={filters.keyId ?? ''}
           onChange={(e) => set({ keyId: e.target.value || undefined })}
         >
@@ -87,16 +89,16 @@ export function MessagesPage() {
             </option>
           ))}
         </select>
-        <label className="text-muted-foreground flex items-center gap-1 text-xs">
+        <label className="text-secondary-foreground flex items-center gap-2 text-sm">
           From
-          <input type="date" aria-label="From date" className="border-input h-8 rounded-md border bg-transparent px-2 text-sm" value={filters.from?.slice(0, 10) ?? ''} onChange={(e) => set({ from: e.target.value ? new Date(e.target.value).toISOString() : undefined })} />
+          <input type="date" aria-label="From date" className="border-input bg-card h-8 rounded-md border px-2.5 text-sm" value={filters.from?.slice(0, 10) ?? ''} onChange={(e) => set({ from: e.target.value ? new Date(e.target.value).toISOString() : undefined })} />
         </label>
-        <label className="text-muted-foreground flex items-center gap-1 text-xs">
+        <label className="text-secondary-foreground flex items-center gap-2 text-sm">
           To
           <input
             type="date"
             aria-label="To date"
-            className="border-input h-8 rounded-md border bg-transparent px-2 text-sm"
+            className="border-input bg-card h-8 rounded-md border px-2.5 text-sm"
             value={filters.to?.slice(0, 10) ?? ''}
             onChange={(e) => set({ to: e.target.value ? new Date(`${e.target.value}T23:59:59`).toISOString() : undefined })}
           />
@@ -105,24 +107,26 @@ export function MessagesPage() {
           {Object.keys(STATUS_LABEL).map((s) => {
             const on = statuses.includes(s);
             return (
-              <Button
+              <button
                 key={s}
-                size="sm"
-                variant={on ? 'secondary' : 'ghost'}
-                className="h-7 text-xs"
+                type="button"
                 aria-pressed={on}
+                className={cn(
+                  'focus-visible:ring-ring/50 flex h-8 items-center rounded-md border px-2.5 text-sm outline-none transition-colors focus-visible:ring-[3px]',
+                  on ? 'bg-card border-input text-foreground shadow-[var(--shadow-sm)]' : 'text-secondary-foreground hover:text-foreground border-transparent',
+                )}
                 onClick={() => {
                   const next = on ? statuses.filter((x) => x !== s) : [...statuses, s];
                   set({ status: next.join(',') || undefined });
                 }}
               >
-                {STATUS_LABEL[s]}
-              </Button>
+                <StatusBadge status={s} />
+              </button>
             );
           })}
         </div>
         {Object.keys(filters).some((k) => !['page', 'pageSize', 'sort', 'order'].includes(k)) && (
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => navigate({ to: '/messages', search: {} as never })}>
+          <Button size="sm" variant="ghost" onClick={() => navigate({ to: '/messages', search: {} as never })}>
             Clear
           </Button>
         )}
@@ -161,21 +165,21 @@ export function ApprovalsPage() {
   const reject = useReject();
 
   const cols: Column<Message>[] = [
-    ...baseCols.filter((c) => c.id !== 'status' && c.id !== 'outcome'),
-    { id: 'age', header: 'Waiting', cell: (m) => <span className="text-muted-foreground text-xs">{fmtAgo(m.createdAt)}</span> },
+    ...baseCols.filter((c) => c.id !== 'status' && c.id !== 'outcome' && c.id !== 'createdAt'),
+    { id: 'age', header: 'Waiting', cell: (m) => <span className="text-secondary-foreground whitespace-nowrap" title={fmtShort(m.createdAt)}>{fmtAgo(m.createdAt)}</span> },
     ...(canDecide
       ? [
           {
             id: 'actions',
             header: '',
-            className: 'text-right pr-6',
+            className: 'text-right',
             cell: (m: Message) => (
               <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                <Button size="sm" variant="outline" className="h-7" onClick={() => approve.mutate([m.id])}>
-                  <Check className="size-3.5" /> Approve
+                <Button size="sm" variant="outline" onClick={() => approve.mutate([m.id])}>
+                  <Check /> Approve
                 </Button>
-                <Button size="sm" variant="ghost" className="h-7" onClick={() => setRejecting([m.id])}>
-                  <X className="size-3.5" /> Reject
+                <Button size="sm" variant="ghost" onClick={() => setRejecting([m.id])}>
+                  <X /> Reject
                 </Button>
               </div>
             ),

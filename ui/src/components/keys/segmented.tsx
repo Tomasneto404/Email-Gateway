@@ -40,9 +40,9 @@ export function Segmented<T extends string>({
           disabled={disabled || o.disabled}
           onClick={() => onChange(o.value)}
           className={cn(
-            'h-full rounded-[5px] px-3 text-sm font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+            'h-full rounded-sm px-3 text-sm font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-60',
             'focus-visible:ring-ring/50 outline-none focus-visible:ring-[3px]',
-            value === o.value ? 'bg-background dark:bg-input text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
+            value === o.value ? 'bg-card dark:bg-white/10 text-foreground shadow-[var(--shadow-sm)]' : 'text-secondary-foreground hover:text-foreground',
           )}
         >
           {o.label}

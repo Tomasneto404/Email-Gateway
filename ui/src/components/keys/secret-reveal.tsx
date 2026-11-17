@@ -1,3 +1,4 @@
+import { Callout } from '@/components/common/page';
 import { Check, ChevronRight, Copy, KeyRound, ShieldAlert, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { ModeBadge } from '@/components/common/badges';
@@ -60,13 +61,12 @@ export function SecretReveal({ secret, name, mode, rotated, onAcknowledgedChange
   return (
     // [&>*]:min-w-0 — long content (the curl example) must scroll, never widen the dialog
     <div className="grid min-w-0 gap-4 [&>*]:min-w-0">
-      <div className="flex items-start gap-2.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-900 dark:text-amber-200">
-        <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+      <Callout tone="warn" icon={<ShieldAlert />}>
         <p>
           <span className="font-medium">This is the only time the full key is shown.</span>{' '}
-          {rotated ? 'The previous secret has stopped working. ' : ''}Store it in your secret manager now; only a hash is kept.
+          <span className="text-secondary-foreground">{rotated ? 'The previous secret has stopped working. ' : ''}Store it in your secret manager now; only a hash is kept.</span>
         </p>
-      </div>
+      </Callout>
 
       <div className="grid gap-2">
         <div className="flex items-center justify-between gap-2">
@@ -107,7 +107,7 @@ export function SecretReveal({ secret, name, mode, rotated, onAcknowledgedChange
         </button>
         {showUsage && (
           <div className="relative border-t">
-            <pre className="bg-muted/40 max-w-full overflow-x-auto p-3 pr-20 font-mono text-[11px] leading-relaxed">{curl}</pre>
+            <pre className="bg-muted/40 max-w-full overflow-x-auto p-3 pr-20 font-mono text-xs leading-5">{curl}</pre>
             <Button type="button" size="sm" variant="outline" className="absolute top-2 right-2 h-7" onClick={() => doCopy('curl', curl)}>
               {copied === 'curl' ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
               {copied === 'curl' ? 'Copied' : 'Copy'}

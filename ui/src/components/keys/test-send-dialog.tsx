@@ -63,7 +63,7 @@ export function TestSendDialog({ policy, disabled }: { policy: KeyPolicy; disabl
             </Field>
             {err && (
               <div role="alert" className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border p-2 text-sm">
-                <span className="font-mono text-xs font-semibold">{err.code}</span> — {err.message}
+                <span className="font-mono text-xs">{err.code}</span> — {err.message}
               </div>
             )}
             {sentId && (
@@ -71,7 +71,7 @@ export function TestSendDialog({ policy, disabled }: { policy: KeyPolicy; disabl
                 <span className="flex items-center gap-2">
                   Status: {msg.data ? <StatusBadge status={msg.data.status} /> : '…'}
                 </span>
-                <Link to="/messages" search={{ id: sentId }} className="text-primary text-xs hover:underline">
+                <Link to="/messages" search={{ id: sentId }} className="text-brand text-sm hover:underline">
                   Open in Messages
                 </Link>
               </div>
