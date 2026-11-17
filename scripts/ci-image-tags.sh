@@ -46,6 +46,7 @@ source_url="${GITHUB_SERVER_URL:-}/${GITHUB_REPOSITORY:-}"
 
 echo "registry=$reg"
 echo "image=$image"
+echo "repository=$(printf '%s' "$repo" | tr '[:upper:]' '[:lower:]')"
 echo "version=${version:-edge}"
 echo "runtime_tags<<__TAGS__"
 for t in "${tags[@]}"; do echo "$image:$t"; done
