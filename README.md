@@ -396,18 +396,23 @@ npx playwright install chromium
 npx playwright test -c ui/playwright.config.ts   # CLI admin → login → opt-in 2FA → create key → test send → Messages; preview sandbox; CSP
 ```
 
-### CI (Forgejo Actions)
+### CI
 
-`.forgejo/workflows/` runs on pushes to `master`, on every PR and on demand:
+| Where | Workflows | Why |
+|---|---|---|
+| **GitHub Actions** (`.github/workflows/`) | **Test**, **E2E**, **Build & Push** | tests run here |
+| **Forgejo** (`.forgejo/workflows/`) | **Build & Push** only | the internal runner lacks resources for the test suites |
+
+The GitHub workflows run on pushes to `master`, on every PR and on demand:
 
 | Workflow | Jobs |
 |---|---|
 | **Test** (`test.yml`) | *checks*: typecheck (backend + UI), stale-OpenAPI-client check, backend unit tests (including the OpenAPI drift test), UI component tests, build. *integration*: the full integration suite |
 | **E2E** (`e2e.yml`) | builds backend + UI, migrates, boots API + worker and runs every Playwright test in one step. Server logs and the Playwright report are attached on failure |
 
-The runner needs no Docker socket. Postgres, Redis and two Mailpits (sandbox + a stand-in for the real SMTP) are job `services:`.
-With `MG_TEST_SERVICES=external` and the `TEST_*` variables, the test suite uses those services instead of testcontainers.
-To reproduce the CI mode locally:
+- The services (Postgres, Redis and two Mailpits: sandbox + a stand-in for the real SMTP) are job `services:` reached on `127.0.0.1` with mapped ports.
+- `runs-on` is pinned to `ubuntu-24.04`.
+- With `MG_TEST_SERVICES=external` and the `TEST_*` variables, the test suite uses those services instead of testcontainers. To reproduce the CI mode locally:
 
 ```bash
 MG_TEST_SERVICES=external TEST_DATABASE_URL=postgresql://… TEST_REDIS_URL=redis://… \
@@ -415,15 +420,39 @@ TEST_SANDBOX_SMTP_HOST=… TEST_SANDBOX_API=http://…:8025 TEST_LIVE_SMTP_HOST=
 npx vitest run
 ```
 
-Requirements on the Forgejo side: Actions enabled for the repository, and a runner offering the `ubuntu-latest` label (act_runner).
+### Docker images (Build & Push)
 
-The same pipelines exist for **GitHub Actions** in `.github/workflows/`. Keep both in sync; they differ in two places:
+`build.yml` (Forgejo and GitHub; on Forgejo it is the only workflow) builds the images and pushes them to the registry set in `DOCKERHUB_URL`:
 
-| | Forgejo (`.forgejo/`) | GitHub (`.github/`) |
-|---|---|---|
-| Reaching `services:` | by service name (the job runs in a container) | `127.0.0.1` + mapped ports (the job runs on the VM) |
-| `actions/upload-artifact` | `@v3` (what act_runner supports) | `@v4` (v3 is shut down on GitHub) |
-| Runner | `ubuntu-latest` | `ubuntu-24.04` (pinned; `ubuntu-latest` moves to Ubuntu 26) |
+| Image | Tags |
+|---|---|
+| runtime (api + worker) | `<repo>:1.2.3`, `:1.2`, `:latest`, `:sha-<commit>` |
+| migrations | the same tags with `-migrate`, e.g. `<repo>:1.2.3-migrate` |
+
+- **Trigger:** push a tag `v1.2.3`, or run the workflow manually.
+  - A manual run takes an optional version. Without one, it tags `:edge` and `:sha-<commit>` only.
+  - Pre-releases (`1.3.0-rc.1`) never move `:latest`.
+- **Forgejo runner:** needs a runner with the `ubuntu-latest` label and access to Docker (buildx), as in the other repositories' build workflows.
+- **Configuration**, the same names on Forgejo (*Repository → Settings → Actions → Variables / Secrets*) and on GitHub (*Settings → Secrets and variables → Actions*):
+
+| Name | Kind | Example | Purpose |
+|---|---|---|---|
+| `DOCKERHUB_URL` | variable | `docker.io` or `harbor.example.com` | registry host (login + image prefix) |
+| `DOCKERHUB_REPOSITORY` | variable | `digitalsign/mail-gateway` | repository/path inside the registry |
+| `DOCKERHUB_USERNAME` | variable | `digitalsign-ci` | registry user (can also be a secret) |
+| `DOCKERHUB_TOKEN` | **secret** | access token | password / access token with push rights |
+| `DOCKERHUB_PLATFORMS` | variable, optional | `linux/amd64,linux/arm64` | defaults to `linux/amd64` |
+
+**Deploy from the registry:**
+
+```bash
+# .env
+MAIL_GATEWAY_IMAGE=docker.io/digitalsign/mail-gateway
+MAIL_GATEWAY_TAG=1.2.3
+# then
+docker compose -f docker-compose.yml pull
+docker compose -f docker-compose.yml up -d --no-build --wait
+```
 
 Layout: `src/send/send.service.ts` holds the single send pipeline and `src/policy/` the pure policy engine plus the Redis guardrails.
 The worker and its providers are in `src/worker/`, the admin API in `src/admin/`, and the schema and committed migrations in `prisma/`.

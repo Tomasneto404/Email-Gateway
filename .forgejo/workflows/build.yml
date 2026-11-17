@@ -1,0 +1,87 @@
+# Build & Push — builds the Docker images and pushes them to the registry in DOCKERHUB_URL.
+#   • runtime image (api + worker):  <registry>/<repository>:<tag>
+#   • migrations image:              <registry>/<repository>:<tag>-migrate
+# Triggers: pushing a tag v1.2.3 (→ 1.2.3, 1.2, latest, sha-<commit>), or manual run with an
+# optional version (empty → edge, sha-<commit>). Tag logic: scripts/ci-image-tags.sh.
+#
+# Actions that receive the registry token are pinned to full commit SHAs (version in the comment).
+#
+# Repository VARIABLES: DOCKERHUB_URL, DOCKERHUB_REPOSITORY, DOCKERHUB_USERNAME,
+#                       DOCKERHUB_PLATFORMS (optional, default linux/amd64)
+# Repository SECRET:    DOCKERHUB_TOKEN (password or access token with push rights)
+name: Build & Push
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, bare semver e.g. 1.2.0 (→ :1.2.0, :1.2, :latest). Empty → :edge"
+        required: false
+        default: ""
+  push:
+    tags: ["v*.*.*"]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Resolve image and tags
+        id: meta
+        env:
+          REGISTRY: ${{ vars.DOCKERHUB_URL }}
+          REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          bash scripts/ci-image-tags.sh >> "$GITHUB_OUTPUT"
+          bash scripts/ci-image-tags.sh | sed -n '/runtime_tags/,/__TAGS__/p'
+
+      - name: Set up QEMU (only for multi-arch)
+        if: contains(vars.DOCKERHUB_PLATFORMS, 'arm')
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to the registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ${{ steps.meta.outputs.registry }}
+          username: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push runtime image (api + worker)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          target: runtime
+          push: true
+          platforms: ${{ vars.DOCKERHUB_PLATFORMS || 'linux/amd64' }}
+          tags: ${{ steps.meta.outputs.runtime_tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
+          cache-to: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache,mode=max
+
+      - name: Build and push migrations image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          target: migrate
+          push: true
+          platforms: ${{ vars.DOCKERHUB_PLATFORMS || 'linux/amd64' }}
+          tags: ${{ steps.meta.outputs.migrate_tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
+
+      - name: Summary
+        run: |
+          echo "Pushed ${{ steps.meta.outputs.image }} version ${{ steps.meta.outputs.version }}"
+          echo "Deploy with: MAIL_GATEWAY_IMAGE=${{ steps.meta.outputs.image }} MAIL_GATEWAY_TAG=${{ steps.meta.outputs.version }}"
