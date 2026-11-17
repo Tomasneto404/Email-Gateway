@@ -3,7 +3,8 @@
 name: mail-gateway
 
 x-app: &app
-  image: mail-gateway:${MAIL_GATEWAY_TAG:-latest}
+  # Registry image (e.g. docker.io/<namespace>/mail-gateway) or the local build name.
+  image: ${MAIL_GATEWAY_IMAGE:-mail-gateway}:${MAIL_GATEWAY_TAG:-latest}
   build:
     context: .
     target: runtime
@@ -75,7 +76,7 @@ services:
     build:
       context: .
       target: migrate
-    image: mail-gateway-migrate:${MAIL_GATEWAY_TAG:-latest}
+    image: ${MAIL_GATEWAY_IMAGE:-mail-gateway}:${MAIL_GATEWAY_TAG:-latest}-migrate
     restart: "no"
     read_only: true
     tmpfs: ["/tmp"]
