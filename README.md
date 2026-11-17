@@ -436,7 +436,11 @@ npx vitest run
 - **Trigger:** push a tag `v1.2.3`, or run the workflow manually.
   - A manual run takes an optional version. Without one, it tags `:edge` and `:sha-<commit>` only.
   - Pre-releases (`1.3.0-rc.1`) never move `:latest`.
-- **Forgejo runner:** needs a runner with the `ubuntu-latest` label and access to Docker (buildx), as in the other repositories' build workflows.
+- **Forgejo runner:** the job runs in `node:22-alpine` and installs the docker CLI and buildx with `apk`.
+  - It builds through the runner's host Docker daemon (act_runner `container.docker_host: automount`) with plain `docker build`/`docker push`.
+  - It builds `linux/amd64` only, so `DOCKERHUB_PLATFORMS` applies to GitHub only.
+  - Layer cache stays in the host daemon between runs.
+- **GitHub:** uses the docker/* actions (buildx, registry cache in `:buildcache`, optional multi-arch).
 - **Configuration**, the same names on Forgejo (*Repository → Settings → Actions → Variables / Secrets*) and on GitHub (*Settings → Secrets and variables → Actions*):
 
 | Name | Kind | Example | Purpose |
@@ -445,7 +449,7 @@ npx vitest run
 | `DOCKERHUB_REPOSITORY` | variable | `infra/mail-gateway` | repository/path inside the registry |
 | `DOCKERHUB_USERNAME` | variable | `ci-bot` | registry user (can also be a secret) |
 | `DOCKERHUB_TOKEN` | **secret** | access token | password / access token with push rights |
-| `DOCKERHUB_PLATFORMS` | variable, optional | `linux/amd64,linux/arm64` | defaults to `linux/amd64` |
+| `DOCKERHUB_PLATFORMS` | variable, optional | `linux/amd64,linux/arm64` | GitHub only; defaults to `linux/amd64` |
 
 **Deploy from the registry:**
 

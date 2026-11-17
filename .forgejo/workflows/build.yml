@@ -1,4 +1,4 @@
-# Build & Push — builds the Docker images and pushes them to the registry in DOCKERHUB_URL.
+# Build & Push (Forgejo) — builds the Docker images and pushes them to the registry in DOCKERHUB_URL.
 #   • runtime image (api + worker):  <registry>/<repository>:<tag>
 #   • migrations image:              <registry>/<repository>:<tag>-migrate
 # Both images are verified as the non-root user before anything is pushed
@@ -6,10 +6,12 @@
 # Triggers: pushing a tag v1.2.3 (→ 1.2.3, 1.2, latest, sha-<commit>), or manual run with an
 # optional version (empty → edge, sha-<commit>). Tag logic: scripts/ci-image-tags.sh.
 #
-# Actions that receive the registry token are pinned to full commit SHAs (version in the comment).
+# Runner: the job image has no Docker; it runs in node:22-alpine, installs the docker CLI + buildx
+# with apk and builds through the runner's host Docker daemon (act_runner
+# `container.docker_host: automount`). Plain `docker build/push` — no docker/* actions, so no
+# separate BuildKit builder; layer cache stays in the host daemon between runs. linux/amd64 only.
 #
-# Repository VARIABLES: DOCKERHUB_URL, DOCKERHUB_REPOSITORY, DOCKERHUB_USERNAME,
-#                       DOCKERHUB_PLATFORMS (optional, default linux/amd64)
+# Repository VARIABLES: DOCKERHUB_URL, DOCKERHUB_REPOSITORY, DOCKERHUB_USERNAME
 # Repository SECRET:    DOCKERHUB_TOKEN (password or access token with push rights)
 name: Build & Push
 
@@ -30,10 +32,26 @@ concurrency:
 jobs:
   image:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    container:
+      image: node:22-alpine
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
+      # bash is not in the image yet, so this step uses sh.
+      - name: Install tools (git, bash, docker CLI + buildx)
+        shell: sh
+        run: apk add --no-cache git bash docker-cli docker-cli-buildx
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Check Docker daemon access
+        run: |
+          docker version --format 'client {{.Client.Version}} / server {{.Server.Version}}' || {
+            echo "::error::No Docker daemon in the job container. The act_runner needs container.docker_host: automount (or a mounted /var/run/docker.sock)."
+            exit 1
+          }
 
       - name: Resolve image and tags
         id: meta
@@ -45,82 +63,62 @@ jobs:
           bash scripts/ci-image-tags.sh >> "$GITHUB_OUTPUT"
           bash scripts/ci-image-tags.sh | sed -n '/runtime_tags/,/__TAGS__/p'
 
-      - name: Set up QEMU (only for multi-arch)
-        if: contains(vars.DOCKERHUB_PLATFORMS, 'arm')
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
-
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-
       - name: Log in to the registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
-        with:
-          registry: ${{ steps.meta.outputs.registry }}
-          username: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        env:
+          REGISTRY: ${{ steps.meta.outputs.registry }}
+          REGISTRY_USER: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${REGISTRY_USER:?Set the DOCKERHUB_USERNAME variable}"
+          : "${REGISTRY_TOKEN:?Set the DOCKERHUB_TOKEN secret}"
+          printf '%s' "$REGISTRY_TOKEN" | docker login "$REGISTRY" --username "$REGISTRY_USER" --password-stdin
 
-      # Verify before publishing: build both targets locally (linux/amd64) and check them as the
-      # non-root `node` user — catches unreadable files (restrictive runner umask) and runtime
-      # dependencies that fail to load. The push builds below reuse this build's cache.
-      - name: Build runtime image for verification
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
-        with:
-          context: .
-          target: runtime
-          load: true
-          push: false
-          platforms: linux/amd64
-          tags: mail-gateway-verify:runtime
-          provenance: false
-          cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
-          cache-to: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache,mode=max
+      - name: Build images
+        env:
+          LABELS: ${{ steps.meta.outputs.labels }}
+        run: |
+          set -euo pipefail
+          label_args=()
+          while IFS= read -r l; do [ -n "$l" ] && label_args+=(--label "$l"); done <<< "$LABELS"
+          docker build --pull --target runtime --tag mail-gateway-verify:runtime "${label_args[@]}" .
+          docker build --target migrate --tag mail-gateway-verify:migrate "${label_args[@]}" .
 
-      - name: Build migrations image for verification
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
-        with:
-          context: .
-          target: migrate
-          load: true
-          push: false
-          platforms: linux/amd64
-          tags: mail-gateway-verify:migrate
-          provenance: false
-          cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
-
-      # The script is streamed over stdin: with the runner's host Docker socket, bind mounts
-      # would resolve on the host, not in the job container.
+      # The script is streamed over stdin: with the host Docker socket, bind mounts would resolve
+      # on the host, not in the job container.
       - name: Verify runtime image as non-root
         run: docker run --rm -i --entrypoint node mail-gateway-verify:runtime --input-type=module - < scripts/check-runtime-image.mjs
 
       - name: Verify migrations image as non-root
         run: docker run --rm --entrypoint node mail-gateway-verify:migrate node_modules/prisma/build/index.js validate
 
-      - name: Build and push runtime image (api + worker)
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
-        with:
-          context: .
-          target: runtime
-          push: true
-          platforms: ${{ vars.DOCKERHUB_PLATFORMS || 'linux/amd64' }}
-          tags: ${{ steps.meta.outputs.runtime_tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          provenance: false
-          cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
+      - name: Push images
+        env:
+          RUNTIME_TAGS: ${{ steps.meta.outputs.runtime_tags }}
+          MIGRATE_TAGS: ${{ steps.meta.outputs.migrate_tags }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r t; do
+            [ -n "$t" ] || continue
+            docker tag mail-gateway-verify:runtime "$t" && docker push "$t"
+          done <<< "$RUNTIME_TAGS"
+          while IFS= read -r t; do
+            [ -n "$t" ] || continue
+            docker tag mail-gateway-verify:migrate "$t" && docker push "$t"
+          done <<< "$MIGRATE_TAGS"
 
-      - name: Build and push migrations image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
-        with:
-          context: .
-          target: migrate
-          push: true
-          platforms: ${{ vars.DOCKERHUB_PLATFORMS || 'linux/amd64' }}
-          tags: ${{ steps.meta.outputs.migrate_tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          provenance: false
-          cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
-
-      - name: Clean up verification images
+      - name: Clean up
         if: always()
-        run: docker image rm mail-gateway-verify:runtime mail-gateway-verify:migrate 2>/dev/null || true
+        env:
+          REGISTRY: ${{ steps.meta.outputs.registry }}
+          RUNTIME_TAGS: ${{ steps.meta.outputs.runtime_tags }}
+          MIGRATE_TAGS: ${{ steps.meta.outputs.migrate_tags }}
+        run: |
+          docker logout "$REGISTRY" >/dev/null 2>&1 || true
+          # remove our tags from the shared host daemon (layers stay cached)
+          for t in mail-gateway-verify:runtime mail-gateway-verify:migrate $RUNTIME_TAGS $MIGRATE_TAGS; do
+            docker image rm "$t" >/dev/null 2>&1 || true
+          done
 
       - name: Summary
         run: |
