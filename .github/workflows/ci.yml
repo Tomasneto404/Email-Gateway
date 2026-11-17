@@ -1,0 +1,211 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+# Forgejo only supports workflow-level concurrency. Superseded branch and PR runs
+# are cancelled (GitLab: interruptible); runs on master queue instead, so a started
+# image publish is never interrupted and never races another (GitLab: resource_group).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+defaults:
+  run:
+    shell: sh
+
+env:
+  npm_config_audit: "false"
+  npm_config_fund: "false"
+
+# The jobs run in node:22-alpine (the Dockerfile's base) instead of setup-node, which
+# re-downloads Node from GitHub on every run. Services are reached by their service name
+# on the job network; no host port is published, so concurrent runs on the same runner
+# host can't collide. MG_TEST_SERVICES=external makes the test suite use them instead of
+# starting testcontainers (see test/helpers/global-setup.ts).
+jobs:
+  # Typecheck (backend + UI), stale OpenAPI client check, unit + UI component tests, build.
+  validate:
+    # Same-repo pull requests are already validated by the branch push run
+    # (GitLab: no duplicate branch + MR pipelines). Fork PRs have no push run.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    container:
+      image: node:22-alpine
+    timeout-minutes: 20
+    services:
+      # test/unit/guardrails.test.ts runs the quota/dedup Lua scripts against a real Redis.
+      redis:
+        image: redis:7-alpine
+    env:
+      MG_TEST_SERVICES: external
+      TEST_REDIS_URL: redis://redis:6379
+    steps:
+      # git for checkout and the stale-client diff, GNU tar for actions/cache.
+      - run: apk add --no-cache git tar
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-
+      - run: npm ci --prefer-offline
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - name: Check the committed OpenAPI client is current
+        run: |
+          npm run gen:api -w ui
+          git diff --exit-code -- ui/src/api/schema.d.ts || {
+            echo "::error::ui/src/api/schema.d.ts is stale: run 'npm run openapi:export && npm run gen:api -w ui'"
+            exit 1
+          }
+      - run: npm run typecheck -w ui
+      # Includes the OpenAPI drift test (openapi.json vs the controllers).
+      - run: npm test
+      - run: npm run test -w ui
+      - run: npm run build
+      - run: npm run build -w ui
+
+  # Full integration suite against Postgres, Redis and two Mailpits
+  # (sandbox + a stand-in for the real SMTP relay).
+  integration:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    container:
+      image: node:22-alpine
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: mailgw
+          POSTGRES_PASSWORD: mailgw
+          POSTGRES_DB: mailgw_test
+        options: >-
+          --health-cmd "pg_isready -U mailgw -d mailgw_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+      redis:
+        image: redis:7-alpine
+      mailpit-sandbox:
+        image: axllent/mailpit:v1.33.1
+        env:
+          MP_SMTP_AUTH_ACCEPT_ANY: "1"
+          MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+          MP_MAX_MESSAGES: "5000"
+      mailpit-live:
+        image: axllent/mailpit:v1.33.1
+        env:
+          MP_SMTP_AUTH_ACCEPT_ANY: "1"
+          MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+          MP_MAX_MESSAGES: "5000"
+    env:
+      MG_TEST_SERVICES: external
+      TEST_DATABASE_URL: postgresql://mailgw:mailgw@postgres:5432/mailgw_test
+      TEST_REDIS_URL: redis://redis:6379
+      TEST_SANDBOX_SMTP_HOST: mailpit-sandbox
+      TEST_SANDBOX_SMTP_PORT: "1025"
+      TEST_SANDBOX_API: http://mailpit-sandbox:8025
+      TEST_LIVE_SMTP_HOST: mailpit-live
+      TEST_LIVE_SMTP_PORT: "1025"
+      TEST_LIVE_API: http://mailpit-live:8025
+    steps:
+      - run: apk add --no-cache git tar
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-
+      - run: npm ci --prefer-offline
+      - run: npx prisma generate
+      - name: Wait for Mailpit
+        run: |
+          for url in "$TEST_SANDBOX_API/livez" "$TEST_LIVE_API/livez"; do
+            i=0
+            until wget -q -O /dev/null "$url"; do
+              i=$((i + 1)); [ "$i" -lt 30 ] || { echo "::error::$url not ready"; exit 1; }
+              sleep 1
+            done
+          done
+      # Migrates the database first (global-setup), then runs every integration test.
+      - run: npm run test:integration
+
+  # master → :dev. Tag v1.2.3 → :1.2.3, :1.2, :latest (pre-releases such as v1.3.0-rc.1
+  # get only their own tag). The migrations image gets the same tags with "-migrate".
+  publish:
+    needs: [validate, integration]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    container:
+      image: node:22-alpine
+    timeout-minutes: 30
+    env:
+      REGISTRY_HOST: registry.example.com
+      IMAGE: registry.example.com/infra/mail-gateway
+    steps:
+      # Builds go through the runner's host Docker daemon (container.docker_host: automount).
+      - run: apk add --no-cache git docker-cli docker-cli-buildx
+      - uses: actions/checkout@v4
+      - name: Resolve tags
+        run: |
+          set -eu
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              version="${GITHUB_REF#refs/tags/v}"
+              echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || {
+                echo "::error::Tag must be semver like v1.2.0 or v1.3.0-rc.1 (got ${GITHUB_REF#refs/tags/})"
+                exit 1
+              }
+              case "$version" in
+                *-*) tags="$version" ;;
+                *) tags="$version ${version%.*} latest" ;;
+              esac
+              ;;
+            *) version=dev tags=dev ;;
+          esac
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TAGS=$tags" >> "$GITHUB_ENV"
+          echo "Tags: $tags"
+      - name: Log in to registry
+        env:
+          DH_USER: ${{ secrets.DH_USER }}
+          DH_PASSWORD: ${{ secrets.DH_PASSWORD }}
+        run: |
+          set -eu
+          : "${DH_USER:?Set the DH_USER secret to the registry login username}"
+          : "${DH_PASSWORD:?Set the DH_PASSWORD secret to the registry password or access token}"
+          printf '%s' "$DH_PASSWORD" | docker login "$REGISTRY_HOST" --username "$DH_USER" --password-stdin
+      - name: Build images
+        run: |
+          set -eu
+          labels="--label org.opencontainers.image.revision=$GITHUB_SHA --label org.opencontainers.image.version=$VERSION"
+          docker build --pull --target runtime --tag "$IMAGE:$VERSION" $labels .
+          docker build --target migrate --tag "$IMAGE:$VERSION-migrate" $labels .
+      # Host-socket bind mounts resolve on the host, so stream the check script over stdin.
+      - name: Verify runtime image as non-root
+        run: >-
+          docker run --rm -i --entrypoint node "$IMAGE:$VERSION"
+          --input-type=module - < scripts/check-runtime-image.mjs
+      - name: Verify migrations image as non-root
+        run: >-
+          docker run --rm --entrypoint node "$IMAGE:$VERSION-migrate"
+          node_modules/prisma/build/index.js validate
+      - name: Push images
+        run: |
+          set -eu
+          for tag in $TAGS; do
+            for suffix in "" -migrate; do
+              docker tag "$IMAGE:$VERSION$suffix" "$IMAGE:$tag$suffix"
+              docker push "$IMAGE:$tag$suffix"
+            done
+          done
+      - name: Clean up
+        if: always()
+        run: |
+          docker logout "$REGISTRY_HOST" || true
+          for tag in ${TAGS:-}; do docker image rm "$IMAGE:$tag" "$IMAGE:$tag-migrate" || true; done
