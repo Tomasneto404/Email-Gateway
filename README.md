@@ -372,6 +372,10 @@ docker compose -f docker-compose.yml -f compose.secrets.yml up -d
 - The request body has a hard size limit (`MAX_REQUEST_BYTES`). Unknown fields are rejected.
 - The worker uses nodemailer with `disableFileAccess`/`disableUrlAccess`, so attachments can't read files or URLs.
 - Containers run as non-root `node` with a read-only root filesystem, `cap_drop: ALL` and `no-new-privileges`. Every service has a healthcheck.
+- **Hardened images:**
+  - The base gets `apk upgrade`, and npm, npx, corepack and yarn are removed from both shipped images. They are never used at runtime and bring their own vulnerable dependencies.
+  - The migrations image contains only the Prisma CLI, at the version from the lockfile.
+  - A Trivy scan (`trivy image --scanners vuln`) reports 0 known vulnerabilities in both images.
 - Admin UI: argon2id + optional (or enforced, `TOTP_REQUIRED`) TOTP, httpOnly/Secure/SameSite=Strict sessions, CSRF token + Origin check, lockout, a strict CSP and sandboxed email previews. See [Admin UI](#admin-ui-ui).
 - Resend webhooks are verified with Svix signatures, and stale timestamps are rejected.
 
@@ -434,7 +438,7 @@ npx vitest run
   - The migrations image runs `prisma validate`.
   - Nothing is pushed if either check fails. The `Dockerfile` makes the built files world-readable, so a restrictive umask on the runner cannot produce an image that fails at start-up.
 - **Trigger:** push a tag `v1.2.3`, or run the workflow manually.
-  - A manual run takes an optional version. Without one, it tags `:edge` and `:sha-<commit>` only.
+  - A manual run takes an optional version. Without one, it tags `:dev` and `:sha-<commit>` only.
   - Pre-releases (`1.3.0-rc.1`) never move `:latest`.
 - **Forgejo runner:** the job runs in `node:22-alpine` and installs the docker CLI and buildx with `apk`.
   - It builds through the runner's host Docker daemon (act_runner `container.docker_host: automount`) with plain `docker build`/`docker push`.
