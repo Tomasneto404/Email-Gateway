@@ -3,7 +3,7 @@
 name: mail-gateway
 
 x-app: &app
-  # Registry image (e.g. registry.example.com/infra/mail-gateway) or the local build name.
+  # Registry image (e.g. docker.io/<namespace>/mail-gateway) or the local build name.
   image: ${MAIL_GATEWAY_IMAGE:-mail-gateway}:${MAIL_GATEWAY_TAG:-latest}
   build:
     context: .
