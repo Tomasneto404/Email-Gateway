@@ -4,7 +4,7 @@
 # Both images are verified as the non-root user before anything is pushed
 # (scripts/check-runtime-image.mjs).
 # Triggers: pushing a tag v1.2.3 (→ 1.2.3, 1.2, latest, sha-<commit>), or manual run with an
-# optional version (empty → edge, sha-<commit>). Tag logic: scripts/ci-image-tags.sh.
+# optional version (empty → dev, sha-<commit>). Tag logic: scripts/ci-image-tags.sh.
 #
 # Actions that receive the registry token are pinned to full commit SHAs (version in the comment).
 #
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version, bare semver e.g. 1.2.0 (→ :1.2.0, :1.2, :latest). Empty → :edge"
+        description: "Version, bare semver e.g. 1.2.0 (→ :1.2.0, :1.2, :latest). Empty → :dev"
         required: false
         default: ""
   push:

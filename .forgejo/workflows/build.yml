@@ -4,7 +4,7 @@
 # Both images are verified as the non-root user before anything is pushed
 # (scripts/check-runtime-image.mjs).
 # Triggers: pushing a tag v1.2.3 (→ 1.2.3, 1.2, latest, sha-<commit>), or manual run with an
-# optional version (empty → edge, sha-<commit>). Tag logic: scripts/ci-image-tags.sh.
+# optional version (empty → dev, sha-<commit>). Tag logic: scripts/ci-image-tags.sh.
 #
 # Runner: the job image has no Docker; it runs in node:22-alpine, installs the docker CLI + buildx
 # with apk and builds through the runner's host Docker daemon (act_runner
@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version, bare semver e.g. 1.2.0 (→ :1.2.0, :1.2, :latest). Empty → :edge"
+        description: "Version, bare semver e.g. 1.2.0 (→ :1.2.0, :1.2, :latest). Empty → :dev"
         required: false
         default: ""
   push:

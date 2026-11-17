@@ -10,7 +10,7 @@
 #
 # Tags:  release 1.2.3        → 1.2.3, 1.2, latest, sha-<commit>
 #        pre-release 1.3.0-rc.1 → 1.3.0-rc.1, sha-<commit>
-#        no version            → edge, sha-<commit>
+#        no version            → dev, sha-<commit>
 # The migrations image gets the same tags with a "-migrate" suffix (same repository).
 set -euo pipefail
 
@@ -37,7 +37,7 @@ if [ -n "$version" ]; then
   tags+=("$version")
   if [[ "$version" != *-* ]]; then tags+=("${version%.*}" "latest"); fi
 else
-  tags+=("edge")
+  tags+=("dev")
 fi
 tags+=("sha-$short")
 
@@ -47,7 +47,7 @@ source_url="${GITHUB_SERVER_URL:-}/${GITHUB_REPOSITORY:-}"
 echo "registry=$reg"
 echo "image=$image"
 echo "repository=$(printf '%s' "$repo" | tr '[:upper:]' '[:lower:]')"
-echo "version=${version:-edge}"
+echo "version=${version:-dev}"
 echo "runtime_tags<<__TAGS__"
 for t in "${tags[@]}"; do echo "$image:$t"; done
 echo "__TAGS__"
@@ -57,7 +57,7 @@ echo "__TAGS__"
 echo "labels<<__LABELS__"
 echo "org.opencontainers.image.title=mail-gateway"
 echo "org.opencontainers.image.description=Mail-sending gateway with guardrails (API, worker, admin UI)"
-echo "org.opencontainers.image.version=${version:-edge}"
+echo "org.opencontainers.image.version=${version:-dev}"
 echo "org.opencontainers.image.revision=$sha"
 echo "org.opencontainers.image.created=$created"
 echo "org.opencontainers.image.source=$source_url"

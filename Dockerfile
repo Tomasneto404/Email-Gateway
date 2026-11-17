@@ -44,11 +44,33 @@ RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
  && find node_modules -type f \( -name '*.map' -o -name '*.md' -o -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' \) -delete \
  && npm cache clean --force
 
+# ---- Prisma CLI only (for the migrations image) ----
+# Installs just the CLI at the exact version pinned in package-lock.json, instead of copying every
+# dev dependency (Vite, Playwright, …) into the image. Install scripts run so the schema engine
+# used by `migrate deploy` is downloaded.
+FROM ${NODE_IMAGE} AS migrate-deps
+WORKDIR /app
+COPY package-lock.json ./
+RUN PRISMA_VERSION="$(node -p "require('./package-lock.json').packages['node_modules/prisma'].version")" \
+ && echo '{"name":"mail-gateway-migrate","private":true}' > package.json \
+ && npm install --omit=dev --no-audit --no-fund "prisma@${PRISMA_VERSION}" \
+ && find node_modules -type f \( -name '*.map' -o -name '*.md' \) -delete \
+ && npm cache clean --force
+
+# ---- hardened base for the shipped images ----
+# Latest Alpine security fixes, and no package managers: npm/npx/corepack/yarn are never used at
+# runtime and bundle their own (often vulnerable) dependencies.
+FROM ${NODE_IMAGE} AS base
+RUN apk upgrade --no-cache \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
+
 # ---- one-shot migrations (docker compose `migrate` service) ----
-FROM ${NODE_IMAGE} AS migrate
+FROM base AS migrate
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=migrate-deps /app/node_modules ./node_modules
 COPY --chmod=644 package.json prisma.config.ts ./
 COPY prisma ./prisma
 RUN chmod -R a+rX prisma
@@ -56,7 +78,7 @@ USER node
 CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
 
 # ---- runtime ----
-FROM ${NODE_IMAGE} AS runtime
+FROM base AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     NODE_OPTIONS=--enable-source-maps
