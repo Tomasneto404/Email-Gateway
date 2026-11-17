@@ -207,8 +207,18 @@ A React single-page app, served by the API on the same origin, so no CORS is inv
 | **Approvals** | Inbox of `pending_approval` messages with preview, approve/reject (with reason) and bulk actions |
 | **Admin users** | Invite a user with roles (one-time link), edit roles, reset 2FA, reset password, disable, delete |
 | **Roles** | RBAC: create/edit roles as sets of permissions, map Authentik groups to roles |
-| **Activity log** | The `admin_audit` table, filterable by action, actor and outcome |
+| **Activity log** | The `admin_audit` table, filterable by action, actor and outcome, and scoped per user or per API key |
 | **Settings** | Effective configuration, read-only and without secrets. Includes the Mailpit link in dev |
+
+**CSV exports.** Messages can be exported by API key or with any list filter, and the activity log in general, per user or per API key:
+- From the UI: *Export* buttons on Messages, the key page, Activity log and Admin users.
+- From the API: `GET /admin/messages/export.csv?keyId=…` and `GET /admin/audit/export.csv?actorId=…|keyId=…`.
+
+Details:
+- Choose `,` or `;` as the separator (`delimiter=semicolon` for Excel in Portuguese and similar locales). Files are UTF-8 with a BOM.
+- Message bodies are never exported.
+- Cells that could run as spreadsheet formulas are neutralised (CSV injection).
+- Exports need `messages:read` / `audit:read`, stream in batches, are capped at `EXPORT_MAX_ROWS`, and are themselves recorded in the activity log.
 
 Keyboard: `⌘K` / `Ctrl+K` opens the command palette, and `g d`, `g k`, `g m`, `g a`, `g u`, `g l`, `g s` jump between screens. Light, dark and system themes are available.
 

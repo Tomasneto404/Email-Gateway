@@ -28,7 +28,10 @@ import { SendAcceptedDto } from '../send/send.dto';
 import { SendService } from '../send/send.service';
 import { AdminAuditService } from './admin-audit.service';
 import { AdminAuthGuard, AdminRequest, RequirePermission, can } from './admin-auth.guard';
-import { AdminMessagesService, STATUSES } from './admin-messages.service';
+import { AdminMessagesService } from './admin-messages.service';
+import { ExportService } from './export.service';
+import { auditWhere, parseAuditQuery, parseMessageQuery } from './filters';
+import type { CsvDelimiter } from '../common/csv';
 import {
   AuditListDto,
   BulkResultDto,
@@ -234,6 +237,10 @@ class BulkBody {
   reason?: string;
 }
 
+function delimiterOf(q: Record<string, string>): CsvDelimiter {
+  return qEnum(q.delimiter, ['comma', 'semicolon'] as const) === 'semicolon' ? ';' : ',';
+}
+
 function validIds(body: BulkBody): string[] {
   if (!body || !Array.isArray(body.ids) || !body.ids.every((i) => typeof i === 'string')) {
     throw new GatewayError('VALIDATION_FAILED', 'Body must be { "ids": string[] }.');
@@ -262,13 +269,16 @@ export function neutralizeHtml(html: string): string {
 
 @AdminController('admin/messages')
 export class AdminMessagesController {
-  constructor(private readonly messages: AdminMessagesService) {}
+  constructor(
+    private readonly messages: AdminMessagesService,
+    private readonly exports: ExportService,
+  ) {}
 
   @Get()
   @RequirePermission('messages:read')
   @ApiOperation({ operationId: 'adminListMessages', summary: 'Search messages (status, key, recipient, subject, date range)' })
   @Paged()
-  @ApiQuery({ name: 'status', required: false, description: `Comma list of ${STATUSES.join(', ')}` })
+  @ApiQuery({ name: 'status', required: false, description: 'Comma list of queued, pending_approval, sent, failed, rejected, captured' })
   @ApiQuery({ name: 'keyId', required: false })
   @ApiQuery({ name: 'recipient', required: false })
   @ApiQuery({ name: 'subject', required: false })
@@ -277,18 +287,25 @@ export class AdminMessagesController {
   @ApiQuery({ name: 'sort', required: false, enum: ['createdAt', 'status', 'subject'] })
   @ApiOkResponse({ type: MessageListDto })
   list(@Query() q: Record<string, string>) {
-    return this.messages.list({
-      status: qList(q.status, STATUSES),
-      keyId: qStr(q.keyId, 36),
-      recipient: qStr(q.recipient, 320),
-      subject: qStr(q.subject),
-      from: qDate(q.from),
-      to: qDate(q.to),
-      page: qInt(q.page),
-      pageSize: qInt(q.pageSize),
-      sort: qEnum(q.sort, ['createdAt', 'status', 'subject'] as const),
-      order: qEnum(q.order, ['asc', 'desc'] as const),
-    });
+    return this.messages.list(parseMessageQuery(q));
+  }
+
+  @Get('export.csv')
+  @RequirePermission('messages:read')
+  @ApiOperation({
+    operationId: 'adminExportMessages',
+    summary: 'Export messages as CSV (same filters as the list; e.g. keyId for one API key). Metadata only, never bodies.',
+  })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'keyId', required: false })
+  @ApiQuery({ name: 'recipient', required: false })
+  @ApiQuery({ name: 'subject', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'delimiter', required: false, enum: ['comma', 'semicolon'], description: 'semicolon for Excel in locales using a decimal comma' })
+  @ApiProduces('text/csv')
+  async export(@Req() req: AdminRequest, @Query() q: Record<string, string>, @Res() res: Response) {
+    await this.exports.messages(parseMessageQuery(q), delimiterOf(q), req.actor, res);
   }
 
   @Get(':id')
@@ -521,38 +538,53 @@ export class AdminRolesController {
 // ---------------------------------------------------------------- activity + settings
 @AdminController('admin/audit')
 export class AdminAuditController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly exports: ExportService,
+  ) {}
 
   @Get()
   @RequirePermission('audit:read')
-  @ApiOperation({ operationId: 'adminListAudit', summary: 'Admin activity log' })
+  @ApiOperation({ operationId: 'adminListAudit', summary: 'Admin activity log (general, per user via actorId, per API key via keyId)' })
   @Paged()
   @ApiQuery({ name: 'action', required: false })
   @ApiQuery({ name: 'actor', required: false })
   @ApiQuery({ name: 'actorType', required: false, enum: ['user', 'token', 'cli', 'system'] })
+  @ApiQuery({ name: 'actorId', required: false, description: 'Activity performed by this admin user' })
+  @ApiQuery({ name: 'keyId', required: false, description: 'Activity performed on this API key' })
   @ApiQuery({ name: 'outcome', required: false, enum: ['success', 'failure'] })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
   @ApiOkResponse({ type: AuditListDto })
-  async list(@Query() q: Record<string, string>) {
-    const page = Math.max(1, qInt(q.page) ?? 1);
-    const pageSize = Math.min(200, Math.max(1, qInt(q.pageSize) ?? 50));
-    const from = qDate(q.from);
-    const to = qDate(q.to);
-    const where: Prisma.AdminAuditWhereInput = {
-      ...(q.action ? { action: { startsWith: qStr(q.action, 100) } } : {}),
-      ...(q.actor ? { actorLabel: { contains: qStr(q.actor, 254), mode: 'insensitive' } } : {}),
-      ...(q.actorType ? { actorType: qEnum(q.actorType, ['user', 'token', 'cli', 'system'] as const) } : {}),
-      ...(q.outcome ? { outcome: qEnum(q.outcome, ['success', 'failure'] as const) } : {}),
-      ...(from || to ? { at: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
-    };
-    const order = qEnum(q.order, ['asc', 'desc'] as const) ?? 'desc';
+  async list(@Query() raw: Record<string, string>) {
+    const q = parseAuditQuery(raw);
+    const page = Math.max(1, q.page ?? 1);
+    const pageSize = Math.min(200, Math.max(1, q.pageSize ?? 50));
+    const where = auditWhere(q);
+    const order = q.order ?? 'desc';
     const [items, total, actions] = await Promise.all([
-      this.prisma.adminAudit.findMany({ where, orderBy: { at: order }, skip: (page - 1) * pageSize, take: pageSize }),
+      this.prisma.adminAudit.findMany({ where, orderBy: [{ at: order }, { id: order }], skip: (page - 1) * pageSize, take: pageSize }),
       this.prisma.adminAudit.count({ where }),
       this.prisma.adminAudit.findMany({ distinct: ['action'], select: { action: true }, orderBy: { action: 'asc' } }),
     ]);
     return { items, total, page, pageSize, actions: actions.map((a) => a.action) };
+  }
+
+  @Get('export.csv')
+  @RequirePermission('audit:read')
+  @ApiOperation({ operationId: 'adminExportAudit', summary: 'Export the activity log as CSV (same filters as the list: general, actorId, keyId, …).' })
+  @ApiQuery({ name: 'action', required: false })
+  @ApiQuery({ name: 'actor', required: false })
+  @ApiQuery({ name: 'actorType', required: false, enum: ['user', 'token', 'cli', 'system'] })
+  @ApiQuery({ name: 'actorId', required: false })
+  @ApiQuery({ name: 'keyId', required: false })
+  @ApiQuery({ name: 'outcome', required: false, enum: ['success', 'failure'] })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'delimiter', required: false, enum: ['comma', 'semicolon'] })
+  @ApiProduces('text/csv')
+  async export(@Req() req: AdminRequest, @Query() q: Record<string, string>, @Res() res: Response) {
+    await this.exports.auditLog(parseAuditQuery(q), delimiterOf(q), req.actor, res);
   }
 }
 

@@ -4,24 +4,12 @@ import { GatewayError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { MessageStatus, Prisma } from '../generated/prisma/client';
 import { MessagesRepository } from '../messages/messages.repository';
+import { MessageQuery, messageWhere } from './filters';
 import { QueueService } from '../queue/queue.service';
 import { Actor, AdminAuditService } from './admin-audit.service';
 
-export const STATUSES: MessageStatus[] = ['queued', 'pending_approval', 'sent', 'failed', 'rejected', 'captured'];
-
-export interface MessageQuery {
-  status?: MessageStatus[];
-  keyId?: string;
-  recipient?: string;
-  subject?: string;
-  q?: string;
-  from?: Date;
-  to?: Date;
-  page?: number;
-  pageSize?: number;
-  sort?: 'createdAt' | 'status' | 'subject';
-  order?: 'asc' | 'desc';
-}
+export { STATUSES } from './filters';
+export type { MessageQuery } from './filters';
 
 @Injectable()
 export class AdminMessagesService {
@@ -36,15 +24,7 @@ export class AdminMessagesService {
   async list(q: MessageQuery) {
     const page = Math.max(1, q.page ?? 1);
     const pageSize = Math.min(200, Math.max(1, q.pageSize ?? 50));
-    const where: Prisma.MessageWhereInput = {
-      ...(q.status?.length ? { status: { in: q.status } } : {}),
-      ...(q.keyId ? { apiKeyId: q.keyId } : {}),
-      ...(q.recipient
-        ? { OR: [{ to: { has: q.recipient.toLowerCase() } }, { cc: { has: q.recipient.toLowerCase() } }, { bcc: { has: q.recipient.toLowerCase() } }] }
-        : {}),
-      ...(q.subject ? { subject: { contains: q.subject, mode: 'insensitive' } } : {}),
-      ...(q.from || q.to ? { createdAt: { ...(q.from ? { gte: q.from } : {}), ...(q.to ? { lte: q.to } : {}) } } : {}),
-    };
+    const where = messageWhere(q);
     const sort = q.sort ?? 'createdAt';
     const order = q.order ?? 'desc';
     const [items, total] = await Promise.all([

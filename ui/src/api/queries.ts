@@ -144,6 +144,10 @@ export interface AuditParams {
   action?: string;
   actor?: string;
   actorType?: 'user' | 'token' | 'cli' | 'system';
+  /** activity performed by this admin user */
+  actorId?: string;
+  /** activity performed on this API key */
+  keyId?: string;
   outcome?: 'success' | 'failure';
   from?: string;
   to?: string;
@@ -169,3 +173,8 @@ export const useUpdateRole = () =>
   });
 export const useDeleteRole = () =>
   useAction((id: string) => call(api.DELETE('/admin/roles/{id}', { params: { path: { id } } })), { invalidate: [['roles'], ['users'], ['session']], success: 'Role deleted' });
+
+/** Name lookups for filter chips (optional, permission-dependent). */
+export const useUsersLookup = (enabled: boolean) => useQuery({ queryKey: ['users'], queryFn: () => call(api.GET('/admin/users')), enabled });
+export const useKeyLookup = (id: string | undefined, enabled: boolean) =>
+  useQuery({ queryKey: ['keys', id], queryFn: () => call(api.GET('/admin/keys/{id}', { params: { path: { id: id! } } })), enabled: !!id && enabled, retry: false });

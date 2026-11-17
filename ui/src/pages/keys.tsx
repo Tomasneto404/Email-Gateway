@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
-import { ArrowLeft, MoreHorizontal, Power, RotateCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, MoreHorizontal, Power, RotateCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
   useDeleteKey,
@@ -15,6 +15,7 @@ import {
   type KeyListParams,
 } from '@/api/queries';
 import { ModeBadge, Pill, StatusBadge } from '@/components/common/badges';
+import { exportUrl } from '@/components/common/export-menu';
 import { EmptyState, PageHeader } from '@/components/common/page';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
 import { Legend, VolumeChart } from '@/components/dashboard/charts';
@@ -26,7 +27,7 @@ import { SecretReveal } from '@/components/keys/secret-reveal';
 import { TestSendDialog } from '@/components/keys/test-send-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -125,6 +126,7 @@ export function KeyDetailPage() {
   const del = useDeleteKey(keyId);
   const [dialog, setDialog] = useState<'rotate' | 'disable' | 'delete' | null>(null);
   const [newSecret, setNewSecret] = useState<string | null>(null);
+  const [secretAck, setSecretAck] = useState(false);
   const [from] = useState(() => new Date(Date.now() - 24 * 3600_000).toISOString());
   const stats = useStats({ keyId, from, bucket: 'hour' });
   const recent = useMessages({ keyId, pageSize: 10 });
@@ -160,6 +162,51 @@ export function KeyDetailPage() {
         actions={
           <>
             {can('keys:test_send') && <TestSendDialog policy={k} disabled={!k.enabled} />}
+            {canAny('messages:read', 'audit:read') && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <Download className="size-4" /> Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {can('messages:read') && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <a href={exportUrl('/admin/messages/export.csv', { keyId })} download data-testid="export-key-messages">
+                          Messages sent by this key (CSV)
+                        </a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <a href={exportUrl('/admin/messages/export.csv', { keyId }, 'semicolon')} download>
+                          Messages — Excel (semicolon)
+                        </a>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {can('audit:read') && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <a href={exportUrl('/admin/audit/export.csv', { keyId })} download data-testid="export-key-activity">
+                          Activity on this key (CSV)
+                        </a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <a href={exportUrl('/admin/audit/export.csv', { keyId }, 'semicolon')} download>
+                          Activity — Excel (semicolon)
+                        </a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/activity" search={{ keyId }}>
+                          View activity on this key
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {canAny('keys:rotate', 'keys:disable', 'keys:delete') && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -262,6 +309,7 @@ export function KeyDetailPage() {
         typeToConfirm={k.name}
         onConfirm={async () => {
           const r = await rotate.mutateAsync();
+          setSecretAck(false);
           setNewSecret(r.secret);
         }}
       />
@@ -290,14 +338,17 @@ export function KeyDetailPage() {
           navigate({ to: '/keys' });
         }}
       />
-      <Dialog open={!!newSecret} onOpenChange={(o) => !o && setNewSecret(null)}>
-        <DialogContent onInteractOutside={(e) => e.preventDefault()}>
+      <Dialog open={!!newSecret} onOpenChange={(o) => !o && secretAck && setNewSecret(null)}>
+        <DialogContent className="sm:max-w-xl" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => !secretAck && e.preventDefault()} showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>New secret for {k.name}</DialogTitle>
+            <DialogDescription>The key was rotated. Update every client that used the old secret.</DialogDescription>
           </DialogHeader>
-          {newSecret && <SecretReveal secret={newSecret} name={k.name} />}
+          {newSecret && <SecretReveal secret={newSecret} name={k.name} mode={k.mode} rotated onAcknowledgedChange={setSecretAck} />}
           <DialogFooter>
-            <Button onClick={() => setNewSecret(null)}>I&apos;ve stored the key</Button>
+            <Button disabled={!secretAck} onClick={() => setNewSecret(null)}>
+              Done
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

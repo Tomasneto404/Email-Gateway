@@ -125,6 +125,9 @@ export const configSchema = z.object({
   MAILPIT_SMTP_PORT: int(1025, 1),
   MAILPIT_UI_URL: optStr,
 
+  /** Maximum rows per CSV export (protects the database; narrow the filters for more). */
+  EXPORT_MAX_ROWS: int(100_000, 1),
+
   DEFAULT_QUOTA_PER_HOUR: int(50),
   DEFAULT_QUOTA_PER_DAY: int(200),
   DEFAULT_MAX_RECIPIENTS: int(10, 1),

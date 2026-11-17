@@ -32,7 +32,8 @@ const STEPS = ['Basics', 'Recipients & limits', 'Key'];
 export function CreateKeyWizard() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
-  const [created, setCreated] = useState<{ id: string; name: string; secret: string } | null>(null);
+  const [created, setCreated] = useState<{ id: string; name: string; secret: string; mode: string } | null>(null);
+  const [secretAck, setSecretAck] = useState(false);
   const create = useCreateKey();
   const navigate = useNavigate();
   const form = useForm<Form>({
@@ -43,6 +44,7 @@ export function CreateKeyWizard() {
   const e = formState.errors;
 
   const close = (o: boolean) => {
+    if (!o && created && !secretAck) return; // the secret is shown once: require confirmation first
     setOpen(o);
     if (!o) {
       if (created) navigate({ to: '/keys/$keyId', params: { keyId: created.id } });
@@ -63,7 +65,8 @@ export function CreateKeyWizard() {
       ...(parsed.quotaPerHour !== undefined ? { quotaPerHour: parsed.quotaPerHour } : {}),
       ...(parsed.quotaPerDay !== undefined ? { quotaPerDay: parsed.quotaPerDay } : {}),
     });
-    setCreated({ id: r.key.id, name: r.key.name, secret: r.secret });
+    setSecretAck(false);
+    setCreated({ id: r.key.id, name: r.key.name, secret: r.secret, mode: r.key.mode });
     setStep(2);
   });
 
@@ -73,7 +76,7 @@ export function CreateKeyWizard() {
         <Plus className="size-4" /> New key
       </Button>
       <Dialog open={open} onOpenChange={close}>
-        <DialogContent className="sm:max-w-lg" onInteractOutside={(ev) => created && ev.preventDefault()}>
+        <DialogContent className={created ? 'sm:max-w-xl' : 'sm:max-w-lg'} onInteractOutside={(ev) => created && ev.preventDefault()} showCloseButton={!created || secretAck}>
           <DialogHeader>
             <DialogTitle>Create API key</DialogTitle>
             <DialogDescription>
@@ -112,7 +115,7 @@ export function CreateKeyWizard() {
                 </div>
               </>
             )}
-            {step === 2 && created && <SecretReveal secret={created.secret} name={created.name} />}
+            {step === 2 && created && <SecretReveal secret={created.secret} name={created.name} mode={created.mode} onAcknowledgedChange={setSecretAck} />}
           </form>
           <DialogFooter>
             {step === 0 && (
@@ -131,8 +134,8 @@ export function CreateKeyWizard() {
               </>
             )}
             {step === 2 && (
-              <Button type="button" onClick={() => close(false)}>
-                I&apos;ve stored the key
+              <Button type="button" disabled={!secretAck} onClick={() => close(false)}>
+                Done
               </Button>
             )}
           </DialogFooter>
