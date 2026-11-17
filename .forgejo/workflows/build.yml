@@ -1,6 +1,8 @@
 # Build & Push — builds the Docker images and pushes them to the registry in DOCKERHUB_URL.
 #   • runtime image (api + worker):  <registry>/<repository>:<tag>
 #   • migrations image:              <registry>/<repository>:<tag>-migrate
+# Both images are verified as the non-root user before anything is pushed
+# (scripts/check-runtime-image.mjs).
 # Triggers: pushing a tag v1.2.3 (→ 1.2.3, 1.2, latest, sha-<commit>), or manual run with an
 # optional version (empty → edge, sha-<commit>). Tag logic: scripts/ci-image-tags.sh.
 #
@@ -56,6 +58,42 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Verify before publishing: build both targets locally (linux/amd64) and check them as the
+      # non-root `node` user — catches unreadable files (restrictive runner umask) and runtime
+      # dependencies that fail to load. The push builds below reuse this build's cache.
+      - name: Build runtime image for verification
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          target: runtime
+          load: true
+          push: false
+          platforms: linux/amd64
+          tags: mail-gateway-verify:runtime
+          provenance: false
+          cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
+          cache-to: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache,mode=max
+
+      - name: Build migrations image for verification
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          target: migrate
+          load: true
+          push: false
+          platforms: linux/amd64
+          tags: mail-gateway-verify:migrate
+          provenance: false
+          cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
+
+      # The script is streamed over stdin: with the runner's host Docker socket, bind mounts
+      # would resolve on the host, not in the job container.
+      - name: Verify runtime image as non-root
+        run: docker run --rm -i --entrypoint node mail-gateway-verify:runtime --input-type=module - < scripts/check-runtime-image.mjs
+
+      - name: Verify migrations image as non-root
+        run: docker run --rm --entrypoint node mail-gateway-verify:migrate node_modules/prisma/build/index.js validate
+
       - name: Build and push runtime image (api + worker)
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
@@ -67,7 +105,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
           cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
-          cache-to: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache,mode=max
 
       - name: Build and push migrations image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
@@ -81,7 +118,11 @@ jobs:
           provenance: false
           cache-from: type=registry,ref=${{ steps.meta.outputs.image }}:buildcache
 
+      - name: Clean up verification images
+        if: always()
+        run: docker image rm mail-gateway-verify:runtime mail-gateway-verify:migrate 2>/dev/null || true
+
       - name: Summary
         run: |
           echo "Pushed ${{ steps.meta.outputs.image }} version ${{ steps.meta.outputs.version }}"
-          echo "Deploy with: MAIL_GATEWAY_IMAGE=${{ steps.meta.outputs.image }} MAIL_GATEWAY_TAG=${{ steps.meta.outputs.version }}"
+          echo "Deploy with (.env): MAIL_GATEWAY_REGISTRY=${{ steps.meta.outputs.registry }} MAIL_GATEWAY_IMAGE=${{ steps.meta.outputs.repository }} MAIL_GATEWAY_TAG=${{ steps.meta.outputs.version }}"

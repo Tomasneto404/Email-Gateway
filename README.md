@@ -429,6 +429,10 @@ npx vitest run
 | runtime (api + worker) | `<repo>:1.2.3`, `:1.2`, `:latest`, `:sha-<commit>` |
 | migrations | the same tags with `-migrate`, e.g. `<repo>:1.2.3-migrate` |
 
+- **Verify before push:** both targets are first built locally (linux/amd64) and checked as the non-root `node` user.
+  - The runtime image runs `scripts/check-runtime-image.mjs`: every file under `dist/` and `ui/dist/` must be readable, and the API and worker module graphs must load, including argon2's native binding and the Prisma client.
+  - The migrations image runs `prisma validate`.
+  - Nothing is pushed if either check fails. The `Dockerfile` makes the built files world-readable, so a restrictive umask on the runner cannot produce an image that fails at start-up.
 - **Trigger:** push a tag `v1.2.3`, or run the workflow manually.
   - A manual run takes an optional version. Without one, it tags `:edge` and `:sha-<commit>` only.
   - Pre-releases (`1.3.0-rc.1`) never move `:latest`.
@@ -446,13 +450,17 @@ npx vitest run
 **Deploy from the registry:**
 
 ```bash
-# .env
-MAIL_GATEWAY_IMAGE=docker.io/infra/mail-gateway
+# .env: image = [MAIL_GATEWAY_REGISTRY/]MAIL_GATEWAY_IMAGE:MAIL_GATEWAY_TAG
+MAIL_GATEWAY_REGISTRY=harbor.example.com   # your registry, host[:port] without https:// (docker.io for Docker Hub)
+MAIL_GATEWAY_IMAGE=infra/mail-gateway      # same value as DOCKERHUB_REPOSITORY in CI
 MAIL_GATEWAY_TAG=1.2.3
 # then
+docker login harbor.example.com            # if the registry is private
 docker compose -f docker-compose.yml pull
 docker compose -f docker-compose.yml up -d --no-build --wait
 ```
+
+Leave `MAIL_GATEWAY_REGISTRY` empty to build the images locally, which is the default.
 
 Layout: `src/send/send.service.ts` holds the single send pipeline and `src/policy/` the pure policy engine plus the Redis guardrails.
 The worker and its providers are in `src/worker/`, the admin API in `src/admin/`, and the schema and committed migrations in `prisma/`.

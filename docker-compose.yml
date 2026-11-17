@@ -3,8 +3,9 @@
 name: mail-gateway
 
 x-app: &app
-  # Registry image (e.g. docker.io/<namespace>/mail-gateway) or the local build name.
-  image: ${MAIL_GATEWAY_IMAGE:-mail-gateway}:${MAIL_GATEWAY_TAG:-latest}
+  # [<MAIL_GATEWAY_REGISTRY>/]<MAIL_GATEWAY_IMAGE>:<MAIL_GATEWAY_TAG>
+  # Empty registry = local build name (mail-gateway:latest). Set the registry to pull from your own.
+  image: ${MAIL_GATEWAY_REGISTRY:+${MAIL_GATEWAY_REGISTRY}/}${MAIL_GATEWAY_IMAGE:-mail-gateway}:${MAIL_GATEWAY_TAG:-latest}
   build:
     context: .
     target: runtime
@@ -76,7 +77,7 @@ services:
     build:
       context: .
       target: migrate
-    image: ${MAIL_GATEWAY_IMAGE:-mail-gateway}:${MAIL_GATEWAY_TAG:-latest}-migrate
+    image: ${MAIL_GATEWAY_REGISTRY:+${MAIL_GATEWAY_REGISTRY}/}${MAIL_GATEWAY_IMAGE:-mail-gateway}:${MAIL_GATEWAY_TAG:-latest}-migrate
     restart: "no"
     read_only: true
     tmpfs: ["/tmp"]
