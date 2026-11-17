@@ -7,13 +7,15 @@ import { DedupService } from '../../src/policy/dedup.service';
 import { IdempotencyService } from '../../src/policy/idempotency.service';
 import { QuotaService } from '../../src/policy/quota.service';
 
-let container: StartedRedisContainer;
+let container: StartedRedisContainer | undefined;
 let redis: Redis;
 let cfg: AppConfig;
 
 beforeAll(async () => {
-  container = await new RedisContainer('redis:7-alpine').start();
-  redis = new IORedis(container.getConnectionUrl());
+  // CI provides Redis as a service (TEST_REDIS_URL); locally a throwaway container is started.
+  const external = process.env.MG_TEST_SERVICES === 'external' ? process.env.TEST_REDIS_URL : undefined;
+  if (!external) container = await new RedisContainer('redis:7-alpine').start();
+  redis = new IORedis(external ?? container!.getConnectionUrl());
   cfg = buildConfig({ DATABASE_URL: 'postgres://unused', GLOBAL_ACCEPT_PER_HOUR: '5', DEDUP_WINDOW_SECONDS: '60' });
 });
 afterAll(async () => {
