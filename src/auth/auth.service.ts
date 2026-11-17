@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable } from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import { AdminAuditService } from '../admin/admin-audit.service';

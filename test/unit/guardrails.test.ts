@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import IORedis, { Redis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';

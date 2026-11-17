@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 // Copies the self-hosted Scalar bundle next to the compiled app (dist/docs-assets/scalar.js).
 import { copyFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';

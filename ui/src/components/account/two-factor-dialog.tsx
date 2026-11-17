@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck, ShieldOff } from 'lucide-react';
 import { useState } from 'react';

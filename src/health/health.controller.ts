@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Controller, Get, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { Response } from 'express';

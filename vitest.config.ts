@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import swc from 'unplugin-swc';
 import { defineConfig } from 'vitest/config';
 

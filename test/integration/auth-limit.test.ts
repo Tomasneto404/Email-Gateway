@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Stack, resetState, startStack } from '../helpers/stack';
 

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import pino, { DestinationStream, Logger } from 'pino';
 
 export const ROOT_LOGGER = Symbol('ROOT_LOGGER');

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Injectable } from '@nestjs/common';
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 

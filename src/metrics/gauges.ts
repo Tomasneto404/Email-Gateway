@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { GatewayStateService } from '../gateway-state/gateway-state.service';

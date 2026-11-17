@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { ArrowLeft, Download, MoreHorizontal, Power, RotateCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';

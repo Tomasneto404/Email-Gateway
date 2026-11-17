@@ -1,3 +1,4 @@
+<!-- Authored by Tomás Neto (TN 2026) -->
 # Resend provider
 
 mail-gateway can deliver live mail through [Resend](https://resend.com) as well as, or instead of, the existing SMTP relay.

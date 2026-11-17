@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Callout } from '@/components/common/page';
 import { Check, ChevronRight, Copy, KeyRound, ShieldAlert, Terminal } from 'lucide-react';
 import { useState } from 'react';

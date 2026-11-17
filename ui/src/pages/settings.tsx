@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { ExternalLink } from 'lucide-react';
 import { useSettings } from '@/api/queries';
 import { Signal } from '@/components/common/badges';

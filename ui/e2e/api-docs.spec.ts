@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { expect, test } from '@playwright/test';
 
 // Scalar API reference: renders the spec with no CSP violations and no requests leaving the gateway.

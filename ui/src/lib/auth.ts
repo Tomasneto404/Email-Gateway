@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { useQuery } from '@tanstack/react-query';
 import { sessionQuery } from '@/api/queries';
 import { canAny, hasPermission } from './permissions';

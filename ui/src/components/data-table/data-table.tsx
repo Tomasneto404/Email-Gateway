@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsUpDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,7 @@ export function DataTable<T>(p: Props<T>) {
     p.onSelectedChange?.(s);
   };
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" data-tour="table">
       <div className="min-h-0 flex-1 overflow-auto">
         <Table>
           <TableHeader className="bg-background sticky top-0 z-10">

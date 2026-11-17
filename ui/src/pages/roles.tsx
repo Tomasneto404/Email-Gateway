@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Lock, Plus, Trash2, X } from 'lucide-react';
 import { useMemo, useState, type KeyboardEvent } from 'react';
 import { usePermissionCatalog, useCreateRole, useDeleteRole, useRoles, useUpdateRole, type RoleT } from '@/api/queries';

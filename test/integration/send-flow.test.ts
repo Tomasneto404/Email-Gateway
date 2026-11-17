@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { EventLogger } from '../../src/common/event-logger';
 import { RetentionService } from '../../src/worker/retention.service';

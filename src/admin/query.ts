@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { GatewayError } from '../common/errors';
 
 export function qInt(v: unknown, def?: number): number | undefined {

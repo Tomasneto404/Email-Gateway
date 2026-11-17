@@ -1,8 +1,10 @@
+// Authored by Tomás Neto (TN 2026)
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ApiError } from '@/api/client';
+import { KonamiEasterEgg } from '@/components/easter-egg/konami';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThemeProvider } from '@/lib/theme';
@@ -35,6 +37,7 @@ createRoot(document.getElementById('root')!).render(
         <TooltipProvider delayDuration={300}>
           <RouterProvider router={router} />
           <Toaster position="bottom-right" />
+          <KonamiEasterEgg />
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>

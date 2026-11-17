@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 // Smoke check for the runtime image, run by CI as the image's non-root user:
 //   docker run --rm -i --entrypoint node <image> --input-type=module - < scripts/check-runtime-image.mjs
 // Catches files the `node` user cannot read (e.g. a restrictive umask on the build runner) and

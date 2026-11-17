@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { format, formatDistanceToNowStrict } from 'date-fns';
 
 export const fmtBytes = (n: number) =>

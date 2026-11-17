@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Inject } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { Logger } from 'pino';

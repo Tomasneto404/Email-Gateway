@@ -1,3 +1,4 @@
+# Authored by Tomás Neto (TN 2026)
 # Keeps the SHA-pinned actions (and npm deps) up to date with reviewable PRs.
 version: 2
 updates:

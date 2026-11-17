@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import express, { NextFunction, Request, Response } from 'express';

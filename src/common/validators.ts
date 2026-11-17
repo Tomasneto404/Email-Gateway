@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { registerDecorator, ValidationOptions } from 'class-validator';
 
 export const CRLF_RE = /[\r\n]/;

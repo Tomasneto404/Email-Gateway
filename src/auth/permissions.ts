@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 /**
  * RBAC permission catalog. Roles hold a list of these ids; "*" grants everything and
  * "<area>:*" grants every permission of an area. A user's effective permissions are the

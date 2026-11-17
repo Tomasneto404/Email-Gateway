@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 /// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Injectable } from '@nestjs/common';
 import { hourBucket } from '../common/time';
 import { PrismaService } from '../common/prisma.service';

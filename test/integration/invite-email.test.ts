@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { PASSWORD, login } from '../helpers/admin-login';

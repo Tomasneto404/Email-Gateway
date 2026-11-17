@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 export type ProviderName = 'smtp' | 'resend' | 'mailpit';
 
 export interface OutboundMessage {

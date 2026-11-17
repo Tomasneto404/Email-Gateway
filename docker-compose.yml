@@ -1,3 +1,4 @@
+# Authored by Tomás Neto (TN 2026)
 # mail-gateway stack. Production: `docker compose -f docker-compose.yml up -d`
 # (compose.override.yml is for local development only and is auto-loaded by `docker compose up`).
 name: mail-gateway

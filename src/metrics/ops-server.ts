@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { createServer, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {

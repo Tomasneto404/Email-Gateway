@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import createClient, { type Middleware } from 'openapi-fetch';
 import type { components, paths } from './schema';
 

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { exportOpenApi } from '../../src/openapi.export';

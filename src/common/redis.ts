@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import IORedis, { Redis } from 'ioredis';
 import { APP_CONFIG, AppConfig } from '../config/config';

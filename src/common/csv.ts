@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 /**
  * RFC 4180 CSV with spreadsheet formula-injection protection (OWASP "CSV injection"):
  * cells starting with = + - @ TAB CR are prefixed with a single quote so Excel/LibreOffice

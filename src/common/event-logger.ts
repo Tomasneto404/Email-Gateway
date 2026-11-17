@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { Logger } from 'pino';
 import { MetricsService } from '../metrics/metrics.service';

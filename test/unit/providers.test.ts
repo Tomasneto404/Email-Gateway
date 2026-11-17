@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { createServer, IncomingMessage, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

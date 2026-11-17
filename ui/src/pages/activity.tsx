@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useAudit, useKeyLookup, useUsersLookup, type AuditParams } from '@/api/queries';
 import { ExportMenu } from '@/components/common/export-menu';

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { DynamicModule, Inject, Injectable, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { CoreModule, CoreOptions } from './core.module';
 import { GatewayStateService } from './gateway-state/gateway-state.service';

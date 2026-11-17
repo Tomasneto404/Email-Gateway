@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { expect, test } from '@playwright/test';
 import { execSync } from 'node:child_process';
 

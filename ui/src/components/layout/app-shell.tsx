@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
@@ -12,6 +13,7 @@ import {
   Moon,
   PauseCircle,
   PlayCircle,
+  Route as RouteIcon,
   Search,
   Settings,
   Shield,
@@ -23,6 +25,7 @@ import { useEffect, useState } from 'react';
 import { api, call, setCsrfToken } from '@/api/client';
 import { usePauseGateway, useResumeGateway, useSystemState } from '@/api/queries';
 import { TwoFactorDialog } from '@/components/account/two-factor-dialog';
+import { TourPrompt, TourProvider, useTour } from '@/components/tour/tour';
 import { Dot } from '@/components/common/badges';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -57,6 +60,7 @@ export function GatewayPill() {
     <Link
       to="/"
       data-testid="gateway-pill"
+      data-tour="gateway-signal"
       className="text-secondary-foreground hover:text-foreground inline-flex items-center gap-2 text-xs"
       title={data.gateway.paused ? (data.gateway.reason ?? 'Paused') : 'Accepting and delivering mail'}
     >
@@ -67,6 +71,15 @@ export function GatewayPill() {
 }
 
 export function AppShell() {
+  return (
+    <TourProvider>
+      <Shell />
+    </TourProvider>
+  );
+}
+
+function Shell() {
+  const tour = useTour();
   const { user, can, canAny } = useMe();
   const nav = NAV.filter((n) => canAny(...n.perms));
   const { data: sys } = useSystemState(can('dashboard:read'));
@@ -126,6 +139,7 @@ export function AppShell() {
           <GatewayPill />
         </div>
         <button
+          data-tour="search"
           onClick={() => setCmd(true)}
           className="text-muted-foreground hover:text-foreground bg-card mx-3 mb-4 flex h-8 items-center gap-2 rounded-md border px-2 text-sm shadow-[var(--shadow-sm)] transition-colors"
         >
@@ -137,6 +151,7 @@ export function AppShell() {
             <Link
               key={n.to}
               to={n.to}
+              data-tour={`nav-${n.to.slice(1) || 'dashboard'}`}
               className={cn(
                 'flex h-8 items-center gap-2.5 rounded-md px-2 text-sm transition-colors',
                 isActive(n.to)
@@ -154,17 +169,19 @@ export function AppShell() {
             </Link>
           ))}
         </nav>
+        <div className="mt-auto" />
+        <TourPrompt />
         <a
           href="/docs"
           target="_blank"
           rel="noreferrer"
-          className="text-secondary-foreground hover:bg-sidebar-active/60 hover:text-foreground mx-3 mt-auto mb-2 flex h-8 items-center gap-2.5 rounded-md px-2 text-sm transition-colors"
+          className="text-secondary-foreground hover:bg-sidebar-active/60 hover:text-foreground mx-3 mb-2 flex h-8 items-center gap-2.5 rounded-md px-2 text-sm transition-colors"
         >
           <BookOpen className="text-muted-foreground size-4" strokeWidth={1.5} /> API docs
         </a>
         <div className="border-t p-3">
           <DropdownMenu>
-            <DropdownMenuTrigger className="hover:bg-sidebar-active/60 flex w-full items-center gap-2.5 rounded-md p-2 text-left text-sm transition-colors">
+            <DropdownMenuTrigger data-tour="user-menu" className="hover:bg-sidebar-active/60 flex w-full items-center gap-2.5 rounded-md p-2 text-left text-sm transition-colors">
               <span className="bg-card text-secondary-foreground grid size-7 place-items-center rounded-full border text-xs font-medium uppercase">{user?.email[0]}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-xs font-medium" data-testid="current-user">{user?.email}</span>
@@ -188,6 +205,9 @@ export function AppShell() {
               <DropdownMenuItem onClick={() => setTwoFactor(true)}>
                 <ShieldCheck className="size-4" /> Two-factor authentication
                 {user?.authSource === 'local' && !user.totpEnrolled && <span className="text-muted-foreground ml-auto text-xs">off</span>}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={tour.start}>
+                <RouteIcon className="size-4" /> Guided tour
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout}>
@@ -255,6 +275,16 @@ export function AppShell() {
               )}
             </CommandGroup>
           )}
+          <CommandGroup heading="Help">
+            <CommandItem
+              onSelect={() => {
+                setCmd(false);
+                tour.start();
+              }}
+            >
+              <RouteIcon className="size-4" /> Start guided tour
+            </CommandItem>
+          </CommandGroup>
           <CommandGroup heading="Theme">
             <CommandItem onSelect={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
               <Moon className="size-4" /> Toggle dark mode

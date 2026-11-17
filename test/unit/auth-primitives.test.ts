@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { describe, expect, it } from 'vitest';
 import { neutralizeHtml, previewCsp } from '../../src/admin/admin.controllers';
 import { groupsFromClaim } from '../../src/auth/authentik.service';

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOkResponse, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';

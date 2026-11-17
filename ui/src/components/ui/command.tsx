@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 import { cn } from "@/lib/utils"

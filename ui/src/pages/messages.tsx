@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Check, X } from 'lucide-react';
 import { useState } from 'react';
@@ -73,7 +74,7 @@ export function MessagesPage() {
           />
         }
       />
-      <div className="flex flex-wrap items-center gap-2 border-b px-8 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b px-8 py-3" data-tour="filters">
         <Input placeholder="Subject" className="h-8 w-52" defaultValue={filters.subject} onChange={(e) => set({ subject: e.target.value || undefined })} />
         <Input placeholder="Recipient (exact)" className="h-8 w-52" defaultValue={filters.recipient} onBlur={(e) => set({ recipient: e.target.value.trim() || undefined })} />
         <select

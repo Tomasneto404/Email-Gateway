@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { expect, test } from '@playwright/test';
 import { execSync } from 'node:child_process';
 
@@ -20,7 +21,9 @@ test('every screen renders without CSP violations', async ({ page }) => {
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   const firstKey = await page.request.get('/admin/keys?pageSize=1').then((r) => r.json());
-  const screens = ['', 'keys', `keys/${firstKey.items[0]?.id}`, 'messages', 'approvals', 'users', 'roles', 'activity', 'settings'];
+  // the key detail screen needs a key; an empty database (fresh stack) skips it
+  const keyId: string | undefined = firstKey.items[0]?.id;
+  const screens = ['', 'keys', ...(keyId ? [`keys/${keyId}`] : []), 'messages', 'approvals', 'users', 'roles', 'activity', 'settings'];
   for (const theme of ['light', 'dark']) {
     await page.evaluate((t) => localStorage.setItem('mg-theme', t), theme);
     for (const s of screens) {

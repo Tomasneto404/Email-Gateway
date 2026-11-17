@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LoggedIn, login } from '../helpers/admin-login';
 import { Stack, createKey, resetState, startStack, uname, waitFor } from '../helpers/stack';

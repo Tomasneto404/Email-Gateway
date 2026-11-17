@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Authored by Tomás Neto (TN 2026)
 # Computes registry, image name, tags and OCI labels for the "Build & Push" workflows
 # (Forgejo and GitHub). Writes step outputs in the $GITHUB_OUTPUT format to stdout.
 #

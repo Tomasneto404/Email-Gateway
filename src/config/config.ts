@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 

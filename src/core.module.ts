@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { DynamicModule, Global, Module } from '@nestjs/common';
 import type { Logger } from 'pino';
 import { AdminAuditService } from './admin/admin-audit.service';

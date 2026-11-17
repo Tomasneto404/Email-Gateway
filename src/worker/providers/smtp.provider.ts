@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import nodemailer, { Transporter } from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { DeliveryProvider, ErrorClassification, OutboundMessage, ProviderName, SendOutcome } from './provider';

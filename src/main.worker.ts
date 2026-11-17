@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { buildConfig } from './config/config';

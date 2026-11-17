@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { OAuth2Server } from 'oauth2-mock-server';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

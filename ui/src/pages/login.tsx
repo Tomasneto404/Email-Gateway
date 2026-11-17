@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { KeyRound, ShieldCheck } from 'lucide-react';

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 "use client"
 
 import * as React from "react"

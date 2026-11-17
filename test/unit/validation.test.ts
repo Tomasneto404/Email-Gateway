@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { describe, expect, it } from 'vitest';
 import { GatewayError } from '../../src/common/errors';
 import { isPlainEmail, isRecipientRule } from '../../src/common/validators';

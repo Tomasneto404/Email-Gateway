@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Injectable } from '@nestjs/common';
 import { EventLogger } from '../common/event-logger';
 import { PrismaService } from '../common/prisma.service';

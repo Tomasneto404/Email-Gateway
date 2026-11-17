@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import type { QueryClient } from '@tanstack/react-query';
 import { Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useParams } from '@tanstack/react-router';
 import { sessionQuery } from '@/api/queries';

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable } from '@nestjs/common';
 import { Actor, AdminAuditService } from '../admin/admin-audit.service';
 import { APP_CONFIG, AppConfig } from '../config/config';

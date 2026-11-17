@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Injectable } from '@nestjs/common';
 import { Actor, AdminAuditService } from '../admin/admin-audit.service';
 import { GatewayError } from '../common/errors';

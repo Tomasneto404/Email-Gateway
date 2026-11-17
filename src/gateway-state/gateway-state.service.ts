@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable } from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import { Actor, AdminAuditService } from '../admin/admin-audit.service';

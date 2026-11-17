@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

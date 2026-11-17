@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1.7
+# Authored by Tomás Neto (TN 2026)
 # One image for api + worker (different commands). Separate `migrate` target keeps the
 # Prisma CLI (and dev deps) out of the runtime image.
 # Build runners can use a restrictive umask, and COPY keeps the checkout's file modes. Files the

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConnectionOptions, JobsOptions, Queue } from 'bullmq';
 import { APP_CONFIG, AppConfig } from '../config/config';

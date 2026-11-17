@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { defineConfig, devices } from '@playwright/test';
 
 /**

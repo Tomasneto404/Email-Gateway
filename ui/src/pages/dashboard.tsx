@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Link } from '@tanstack/react-router';
 import { PauseCircle, PlayCircle } from 'lucide-react';
 import { useState } from 'react';
@@ -53,6 +54,7 @@ export function DashboardPage() {
       <div className="grid w-full max-w-[1600px] gap-4 px-8 py-6">
         <section
           aria-label="Gateway state"
+          data-tour="gateway-state"
           className={cn('bg-card flex min-h-16 flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border px-5 py-3 shadow-[var(--shadow-sm)]', g?.paused && 'border-destructive/40')}
         >
           {!sys.data ? (
@@ -120,7 +122,7 @@ export function DashboardPage() {
           />
         </div>
 
-        <Card className="gap-4">
+        <Card className="gap-4" data-tour="traffic">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Traffic</CardTitle>
             <Legend />

@@ -1,3 +1,4 @@
+# Authored by Tomás Neto (TN 2026)
 # Build & Push — builds the Docker images and pushes them to the registry in DOCKERHUB_URL.
 #   • runtime image (api + worker):  <registry>/<repository>:<tag>
 #   • migrations image:              <registry>/<repository>:<tag>-migrate

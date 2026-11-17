@@ -1,3 +1,4 @@
+<!-- Authored by Tomás Neto (TN 2026) -->
 # Authentik SSO for the admin UI
 
 The admin UI can sign people in with [Authentik](https://goauthentik.io) over OpenID Connect.

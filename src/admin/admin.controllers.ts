@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import {
   ApiAcceptedResponse,
@@ -30,7 +31,7 @@ import { AdminAuditService } from './admin-audit.service';
 import { AdminAuthGuard, AdminRequest, RequirePermission, can } from './admin-auth.guard';
 import { AdminMessagesService } from './admin-messages.service';
 import { ExportService } from './export.service';
-import { auditWhere, parseAuditQuery, parseMessageQuery } from './filters';
+import { auditWhere, parseAuditQuery, parseMessageQuery, qUuid } from './filters';
 import type { CsvDelimiter } from '../common/csv';
 import {
   AuditListDto,
@@ -417,7 +418,7 @@ export class AdminStatsController {
   @ApiQuery({ name: 'keyId', required: false })
   @ApiOkResponse({ type: StatsOverviewDto })
   overview(@Query() q: Record<string, string>) {
-    return this.stats.overview({ from: qDate(q.from), to: qDate(q.to), bucket: qEnum(q.bucket, ['hour', 'day'] as const), keyId: qStr(q.keyId, 36) });
+    return this.stats.overview({ from: qDate(q.from), to: qDate(q.to), bucket: qEnum(q.bucket, ['hour', 'day'] as const), keyId: qUuid(q.keyId, 'keyId') });
   }
 
   @Get('system')

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import type { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import { ErrorResponseDto } from './public-api/public.dto';

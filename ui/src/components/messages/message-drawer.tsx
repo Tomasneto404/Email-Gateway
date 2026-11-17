@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { ExternalLink, ImageOff, Image as ImageIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useMessage } from '@/api/queries';

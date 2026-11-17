@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Check, Copy, Inbox } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,11 @@ export function PageHeader({ title, description, actions }: { title: ReactNode; 
         <h1 className="text-xl leading-7 font-medium">{title}</h1>
         {description && <p className="text-secondary-foreground text-sm">{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex items-center gap-2" data-tour="page-actions">
+          {actions}
+        </div>
+      )}
     </div>
   );
 }

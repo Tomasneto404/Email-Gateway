@@ -1,3 +1,4 @@
+<!-- Authored by Tomás Neto (TN 2026) -->
 # mail-gateway
 
 A central, containerized mail-sending gateway. Internal applications and LLM agents send email through an HTTP API.
@@ -221,6 +222,8 @@ Details:
 - Exports need `messages:read` / `audit:read`, stream in batches, are capped at `EXPORT_MAX_ROWS`, and are themselves recorded in the activity log.
 
 Keyboard: `⌘K` / `Ctrl+K` opens the command palette, and `g d`, `g k`, `g m`, `g a`, `g u`, `g l`, `g s` jump between screens. Light, dark and system themes are available.
+
+Guided tour: new users are offered a two-minute tour in the sidebar. It walks through the signal light, pausing the gateway, the traffic chart, keys and their policy, the message log, approvals, the activity log and roles. Steps the user's roles cannot reach are left out. Restart it at any time from the account menu (**Guided tour**) or the command palette. "Seen" is remembered per user in the browser (localStorage). Keys during the tour: `→` next, `←` back, `Esc` leaves. To point a new step at an element, give it `data-tour="<name>"` and add the step in `ui/src/components/tour/steps.ts`.
 
 Confirmations:
 - Pausing the gateway, rejecting messages and promoting a key to live ask for confirmation.

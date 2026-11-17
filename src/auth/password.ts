@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import * as argon2 from 'argon2';
 import { GatewayError } from '../common/errors';
 

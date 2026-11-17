@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { DynamicModule, Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';

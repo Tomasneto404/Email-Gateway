@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { createServer, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Webhook } from 'svix';

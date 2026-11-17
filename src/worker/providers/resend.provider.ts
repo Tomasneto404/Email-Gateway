@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Resend } from 'resend';
 import { DeliveryProvider, ErrorClassification, OutboundMessage, SendOutcome } from './provider';
 

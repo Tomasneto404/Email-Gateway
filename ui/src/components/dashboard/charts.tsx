@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { format } from 'date-fns';
 import { Area, Bar, CartesianGrid, ComposedChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { Schemas } from '@/api/client';

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { z } from 'zod';
 
 /** Mirrors the backend validators (src/common/validators.ts). */

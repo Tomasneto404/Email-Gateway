@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';

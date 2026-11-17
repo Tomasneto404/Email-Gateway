@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SecretBox } from '../../src/auth/crypto';

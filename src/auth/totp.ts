@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { createHmac, randomBytes } from 'node:crypto';
 
 /** RFC 6238 TOTP (SHA-1, 6 digits, 30 s) — the parameters every authenticator app supports. */

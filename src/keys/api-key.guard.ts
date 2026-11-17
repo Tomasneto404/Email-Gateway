@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
 import { EventLogger } from '../common/event-logger';

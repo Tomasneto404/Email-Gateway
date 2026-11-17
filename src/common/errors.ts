@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 /**
  * Machine-readable error codes returned as `{ error: { code, message, details } }`.
  * Messages are written so an LLM agent can understand what to change.

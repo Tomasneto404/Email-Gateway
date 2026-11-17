@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { GatewayError } from '../common/errors';
 import { MessageStatus, Prisma } from '../generated/prisma/client';
 import { qDate, qEnum, qInt, qList, qStr } from './query';

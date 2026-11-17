@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { createHash } from 'node:crypto';
 import { GatewayError } from '../common/errors';
 

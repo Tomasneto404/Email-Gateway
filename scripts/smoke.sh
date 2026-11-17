@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Authored by Tomás Neto (TN 2026)
 # End-to-end smoke test against a running `docker compose up` stack (dev override loaded).
 # Creates a sandbox key with the CLI, sends a message, checks Mailpit and the guardrails.
 set -euo pipefail

@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import request from 'supertest';
 import { CLI_ACTOR } from '../../src/admin/admin-audit.service';
 import { SecretBox } from '../../src/auth/crypto';

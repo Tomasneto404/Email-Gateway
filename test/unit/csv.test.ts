@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { describe, expect, it } from 'vitest';
 import { csvCell, csvRow, fileSafe } from '../../src/common/csv';
 

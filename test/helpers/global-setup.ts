@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 import { execFileSync } from 'node:child_process';

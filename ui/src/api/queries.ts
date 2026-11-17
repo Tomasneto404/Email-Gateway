@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, call, errorMessage, setCsrfToken, type Schemas } from './client';

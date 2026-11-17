@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';

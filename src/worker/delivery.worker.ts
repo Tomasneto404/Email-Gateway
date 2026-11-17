@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { DelayedError, Job, UnrecoverableError, Worker } from 'bullmq';
 import { APP_CONFIG, AppConfig } from '../config/config';

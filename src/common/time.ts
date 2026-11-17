@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 export function hourBucket(d = new Date()): Date {
   const b = new Date(d);
   b.setUTCMinutes(0, 0, 0);

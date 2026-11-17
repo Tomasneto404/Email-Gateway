@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Inject, Injectable } from '@nestjs/common';
 import { APP_CONFIG, AppConfig, liveProvidersEnabled } from '../config/config';
 import { EventLogger } from '../common/event-logger';

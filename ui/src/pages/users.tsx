@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 import { Link } from '@tanstack/react-router';
 import { MailCheck, MoreHorizontal, UserPlus } from 'lucide-react';
 import { useState } from 'react';

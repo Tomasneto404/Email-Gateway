@@ -1,3 +1,4 @@
+// Authored by Tomás Neto (TN 2026)
 /** Mirrors src/auth/permissions.ts hasPermission (UI gating only; the server enforces). */
 export function hasPermission(granted: readonly string[] | undefined, needed: string): boolean {
   if (!granted) return false;
