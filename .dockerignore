@@ -13,3 +13,5 @@ secrets
 test-results
 playwright-report
 *.log
+# README screenshots are not needed in the image
+docs/images

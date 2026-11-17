@@ -5,6 +5,12 @@ A central, containerized mail-sending gateway. Internal applications and LLM age
 The gateway relays it through the **existing SMTP relay** or **Resend** in live mode, and through **Mailpit** in sandbox mode.
 
 The point of the gateway is to **protect the sender reputation** from misbehaving clients: loops, prompt injection and bugs.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
+  <img src="docs/images/dashboard-light.png" alt="mail-gateway admin dashboard: gateway state, delivered and rejected counts, traffic chart with delivered mail above the axis and policy rejections below, top keys and rejections by reason" width="100%">
+</picture>
+
 The guardrails are the product:
 
 | Guardrail | What it does |
@@ -200,16 +206,39 @@ With Resend webhooks, `deliveryOutcome` adds `delivered` / `delayed` / `bounced`
 A React single-page app, served by the API on the same origin, so no CORS is involved. Its API client and types are generated from
 `openapi.json`, so the UI can't drift from the backend (`npm run gen:api -w ui`).
 
+The gateway's state is always in view as a **signal light** at the top of the sidebar: green while it accepts and delivers, amber when an admin paused it, red when a provider's circuit breaker tripped. Statuses and modes use the same language everywhere: a dot and a word, solid once reached, hollow while waiting or stopped before sending.
+
 | Screen | What you can do |
 |---|---|
-| **Dashboard** | Gateway state, breaker state per provider, SMTP health and pause/resume. Sent/rejected/delivered over time, rejections by reason, top keys, queue depth and pending approvals |
+| **Dashboard** | Gateway state, breaker state per provider, relay health and pause/resume. Traffic chart with delivered mail above the axis and policy rejections below it, accepted/delivered/rejected/failed counts, pending approvals, top keys and rejections by reason |
 | **API keys** | List with today's/hour's usage against quota. Create wizard that shows the secret once. Key page with policy editor (mode with a live-promotion warning, sender, recipient chips, quotas, limits, attachments, provider), 24 h usage chart, recent messages, rotate, enable/disable, delete and **Send test email** |
-| **Messages** | Search by status, key, recipient, subject and date range. Detail drawer with metadata, status timeline, attempts, provider response, headers and text body. The HTML body is shown in a sandboxed iframe |
+| **Messages** | Search by status, key, recipient, subject and date range. Detail drawer with the message's route (received → queued → delivered / failed, or stopped by policy), metadata, status timeline, attempts, provider response, headers and text body. The HTML body is shown in a sandboxed iframe |
 | **Approvals** | Inbox of `pending_approval` messages with preview, approve/reject (with reason) and bulk actions |
 | **Admin users** | Invite a user with roles (one-time link), edit roles, reset 2FA, reset password, disable, delete |
 | **Roles** | RBAC: create/edit roles as sets of permissions, map Authentik groups to roles |
 | **Activity log** | The `admin_audit` table, filterable by action, actor and outcome, and scoped per user or per API key |
 | **Settings** | Effective configuration, read-only and without secrets. Includes the Mailpit link in dev |
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/key-detail.png" alt="API key page: policy editor with mode, sender, allow-list and quotas, usage for this hour and today, 24 hour chart and recent messages"></td>
+    <td width="50%"><img src="docs/images/message-route.png" alt="Message drawer: the route of a failed message from received to queued to failed after 6 attempts, with the relay's 550 response"></td>
+  </tr>
+  <tr>
+    <td><sub><b>API key</b>: the policy editor, quota usage and the key's recent messages</sub></td>
+    <td><sub><b>Message detail</b>: the route a message took and the relay's answer</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/approvals-dark.png" alt="Approvals inbox in dark theme with two held alerts and approve/reject buttons"></td>
+    <td><img src="docs/images/roles-dark.png" alt="Roles in dark theme: built-in roles with their permissions and mapped Authentik groups"></td>
+  </tr>
+  <tr>
+    <td><sub><b>Approvals</b>: mail from approval-mode keys waits for a human</sub></td>
+    <td><sub><b>Roles</b>: permissions per role, Authentik groups mapped onto roles</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots use demo data on `example.com` domains.</sub>
 
 **CSV exports.** Messages can be exported by API key or with any list filter, and the activity log in general, per user or per API key:
 - From the UI: *Export* buttons on Messages, the key page, Activity log and Admin users.
@@ -222,6 +251,8 @@ Details:
 - Exports need `messages:read` / `audit:read`, stream in batches, are capped at `EXPORT_MAX_ROWS`, and are themselves recorded in the activity log.
 
 Keyboard: `⌘K` / `Ctrl+K` opens the command palette, and `g d`, `g k`, `g m`, `g a`, `g u`, `g l`, `g s` jump between screens. Light, dark and system themes are available.
+
+<img src="docs/images/guided-tour.png" alt="Guided tour on the dashboard: the traffic chart is spotlighted and a card explains it, step 4 of 12" width="100%">
 
 Guided tour: new users are offered a two-minute tour in the sidebar. It walks through the signal light, pausing the gateway, the traffic chart, keys and their policy, the message log, approvals, the activity log and roles. Steps the user's roles cannot reach are left out. Restart it at any time from the account menu (**Guided tour**) or the command palette. "Seen" is remembered per user in the browser (localStorage). Keys during the tour: `→` next, `←` back, `Esc` leaves. To point a new step at an element, give it `data-tour="<name>"` and add the step in `ui/src/components/tour/steps.ts`.
 
