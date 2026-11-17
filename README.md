@@ -396,6 +396,27 @@ npx playwright install chromium
 npx playwright test -c ui/playwright.config.ts   # CLI admin → login → opt-in 2FA → create key → test send → Messages; preview sandbox; CSP
 ```
 
+### CI (Forgejo Actions)
+
+`.forgejo/workflows/` runs on pushes to `master`, on every PR and on demand:
+
+| Workflow | Jobs |
+|---|---|
+| **Test** (`test.yml`) | *checks*: typecheck (backend + UI), stale-OpenAPI-client check, backend unit tests (including the OpenAPI drift test), UI component tests, build. *integration*: the full integration suite |
+| **E2E** (`e2e.yml`) | builds backend + UI, migrates, boots API + worker and runs every Playwright test in one step. Server logs and the Playwright report are attached on failure |
+
+The runner needs no Docker socket. Postgres, Redis and two Mailpits (sandbox + a stand-in for the real SMTP) are job `services:`.
+With `MG_TEST_SERVICES=external` and the `TEST_*` variables, the test suite uses those services instead of testcontainers.
+To reproduce the CI mode locally:
+
+```bash
+MG_TEST_SERVICES=external TEST_DATABASE_URL=postgresql://… TEST_REDIS_URL=redis://… \
+TEST_SANDBOX_SMTP_HOST=… TEST_SANDBOX_API=http://…:8025 TEST_LIVE_SMTP_HOST=… TEST_LIVE_API=http://…:8025 \
+npx vitest run
+```
+
+Requirements on the Forgejo side: Actions enabled for the repository, and a runner offering the `ubuntu-latest` label (act_runner).
+
 Layout: `src/send/send.service.ts` holds the single send pipeline and `src/policy/` the pure policy engine plus the Redis guardrails.
 The worker and its providers are in `src/worker/`, the admin API in `src/admin/`, and the schema and committed migrations in `prisma/`.
 See [`.env.example`](.env.example) for every configuration variable.

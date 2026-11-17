@@ -31,7 +31,36 @@ function mailpit() {
     .start();
 }
 
+/**
+ * CI mode (MG_TEST_SERVICES=external): use services provided by the pipeline (e.g. Forgejo
+ * Actions `services:`) instead of starting containers — no Docker socket needed in the runner.
+ */
+function externalStack() {
+  const e = process.env;
+  const need = (k: string) => {
+    const v = e[k];
+    if (!v) throw new Error(`MG_TEST_SERVICES=external requires ${k}`);
+    return v;
+  };
+  return {
+    DATABASE_URL: need('TEST_DATABASE_URL'),
+    REDIS_URL: need('TEST_REDIS_URL'),
+    SANDBOX_SMTP_HOST: need('TEST_SANDBOX_SMTP_HOST'),
+    SANDBOX_SMTP_PORT: e.TEST_SANDBOX_SMTP_PORT ?? '1025',
+    SANDBOX_API: need('TEST_SANDBOX_API'),
+    LIVE_SMTP_HOST: need('TEST_LIVE_SMTP_HOST'),
+    LIVE_SMTP_PORT: e.TEST_LIVE_SMTP_PORT ?? '1025',
+    LIVE_API: need('TEST_LIVE_API'),
+  };
+}
+
 export default async function setup(project: TestProject) {
+  if (process.env.MG_TEST_SERVICES === 'external') {
+    const stack = externalStack();
+    execFileSync('npx', ['prisma', 'migrate', 'deploy'], { env: { ...process.env, DATABASE_URL: stack.DATABASE_URL }, stdio: 'pipe' });
+    project.provide('stack', stack);
+    return async () => undefined;
+  }
   const [pg, redis, sandbox, live] = (await Promise.all([
     new PostgreSqlContainer('postgres:17-alpine').start(),
     new RedisContainer('redis:7-alpine').start(),
