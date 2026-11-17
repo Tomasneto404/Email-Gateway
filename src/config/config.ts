@@ -162,6 +162,22 @@ export function buildConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       if (!cfg[k]) problems.push(`${k}: required when AUTHENTIK_ENABLED=true`);
     }
   }
+  // PUBLIC_URL is the base of the SSO redirect URI and of the CSRF Origin check: it must be an
+  // absolute http(s) origin, e.g. https://mail-gw.example.com or http://localhost:3000.
+  if (cfg.PUBLIC_URL) {
+    let u: URL | null = null;
+    try {
+      u = new URL(cfg.PUBLIC_URL);
+    } catch {
+      /* reported below */
+    }
+    if (!u || !['http:', 'https:'].includes(u.protocol) || (u.pathname !== '/' && u.pathname !== '')) {
+      problems.push(`PUBLIC_URL: must be an absolute http(s) URL without a path, e.g. http://localhost:3000 (got "${cfg.PUBLIC_URL}")`);
+    }
+  }
+  for (const k of ['AUTHENTIK_ISSUER'] as const) {
+    if (cfg[k] && !/^https?:\/\//.test(cfg[k]!)) problems.push(`${k}: must start with https:// (got "${cfg[k]}")`);
+  }
   if (cfg.SYSTEM_MAIL_FROM && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(cfg.SYSTEM_MAIL_FROM)) {
     problems.push('SYSTEM_MAIL_FROM: must be a plain email address');
   }
