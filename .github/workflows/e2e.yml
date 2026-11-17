@@ -1,6 +1,7 @@
-# End-to-end (Playwright) against the real app: builds backend + admin UI, applies migrations, then in
-# ONE step boots the API and the worker and runs the browser tests — a process backgrounded in one
-# step does not survive into the next on act_runner. Runs on every PR, pushes to master, and on demand.
+# End-to-end (Playwright) — GitHub Actions version.
+#
+# Differences from .forgejo/workflows/e2e.yml: services via mapped ports on localhost, and
+# actions/upload-artifact@v4 (v3 is shut down on GitHub; Forgejo's act_runner keeps v3).
 name: E2E
 
 on:
@@ -15,7 +16,7 @@ concurrency:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17-alpine
@@ -23,26 +24,29 @@ jobs:
           POSTGRES_USER: mailgw
           POSTGRES_PASSWORD: mailgw
           POSTGRES_DB: mailgw_e2e
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U mailgw -d mailgw_e2e"
           --health-interval 5s --health-timeout 3s --health-retries 20
       redis:
         image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
       mailpit:
         image: axllent/mailpit:v1.33.1
+        ports: ["1025:1025", "8025:8025"]
     env:
-      # app configuration (same variables as docker-compose / .env)
       NODE_ENV: production
       LOG_LEVEL: warn
-      DATABASE_URL: postgresql://mailgw:mailgw@postgres:5432/mailgw_e2e
-      REDIS_URL: redis://redis:6379
-      MAILPIT_SMTP_HOST: mailpit
+      DATABASE_URL: postgresql://mailgw:mailgw@127.0.0.1:5432/mailgw_e2e
+      REDIS_URL: redis://127.0.0.1:6379
+      MAILPIT_SMTP_HOST: 127.0.0.1
       MAILPIT_SMTP_PORT: "1025"
       PORT: "3000"
       COOKIE_SECURE: "false"
       APP_ENCRYPTION_KEY: ZTJlLWNpLW9ubHktbm90LWEtcmVhbC1zZWNyZXQtMDA=  # 32 bytes, CI-only test value
       METRICS_PORT: "9464"
-      # Playwright
       MG_BASE_URL: http://127.0.0.1:3000
       MG_CLI: node dist/cli.js
     steps:
@@ -83,7 +87,7 @@ jobs:
 
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-results
           path: ui/test-results

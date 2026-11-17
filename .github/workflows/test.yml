@@ -1,8 +1,7 @@
-# Test — typecheck, unit and integration tests. Runs on pushes to master, every PR and on demand.
+# Test — typecheck, unit and integration tests (GitHub Actions version).
 #
-# No Docker socket is needed in the runner: Postgres, Redis and two Mailpits (sandbox + a stand-in
-# for the real SMTP) are job `services:`, reached by service name. The test suite switches from
-# testcontainers to these with MG_TEST_SERVICES=external (see test/helpers/global-setup.ts).
+# Differences from .forgejo/workflows/test.yml: on GitHub the job runs directly on the VM, so
+# `services:` are reached through mapped ports on localhost (not by service name).
 name: Test
 
 on:
@@ -18,13 +17,16 @@ concurrency:
 jobs:
   checks:
     name: Typecheck + unit tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       redis:
         image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
     env:
       MG_TEST_SERVICES: external
-      TEST_REDIS_URL: redis://redis:6379
+      TEST_REDIS_URL: redis://127.0.0.1:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,7 +63,7 @@ jobs:
 
   integration:
     name: Integration tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17-alpine
@@ -69,31 +71,37 @@ jobs:
           POSTGRES_USER: mailgw
           POSTGRES_PASSWORD: mailgw
           POSTGRES_DB: mailgw_test
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U mailgw -d mailgw_test"
           --health-interval 5s --health-timeout 3s --health-retries 20
       redis:
         image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
       mailpit-sandbox:
         image: axllent/mailpit:v1.33.1
         env:
           MP_SMTP_AUTH_ACCEPT_ANY: "1"
           MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+        ports: ["1025:1025", "8025:8025"]
       mailpit-live:
         image: axllent/mailpit:v1.33.1
         env:
           MP_SMTP_AUTH_ACCEPT_ANY: "1"
           MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+        ports: ["2025:1025", "9025:8025"]
     env:
       MG_TEST_SERVICES: external
-      TEST_DATABASE_URL: postgresql://mailgw:mailgw@postgres:5432/mailgw_test
-      TEST_REDIS_URL: redis://redis:6379
-      TEST_SANDBOX_SMTP_HOST: mailpit-sandbox
+      TEST_DATABASE_URL: postgresql://mailgw:mailgw@127.0.0.1:5432/mailgw_test
+      TEST_REDIS_URL: redis://127.0.0.1:6379
+      TEST_SANDBOX_SMTP_HOST: 127.0.0.1
       TEST_SANDBOX_SMTP_PORT: "1025"
-      TEST_SANDBOX_API: http://mailpit-sandbox:8025
-      TEST_LIVE_SMTP_HOST: mailpit-live
-      TEST_LIVE_SMTP_PORT: "1025"
-      TEST_LIVE_API: http://mailpit-live:8025
+      TEST_SANDBOX_API: http://127.0.0.1:8025
+      TEST_LIVE_SMTP_HOST: 127.0.0.1
+      TEST_LIVE_SMTP_PORT: "2025"
+      TEST_LIVE_API: http://127.0.0.1:9025
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -108,9 +116,9 @@ jobs:
       - name: Prisma client
         run: npx prisma generate
 
-      - name: Wait for services
+      - name: Wait for Mailpit
         run: |
-          for url in http://mailpit-sandbox:8025/livez http://mailpit-live:8025/livez; do
+          for url in http://127.0.0.1:8025/livez http://127.0.0.1:9025/livez; do
             for i in $(seq 1 30); do curl -fsS "$url" >/dev/null && break; sleep 1; done
           done
 

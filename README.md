@@ -417,6 +417,14 @@ npx vitest run
 
 Requirements on the Forgejo side: Actions enabled for the repository, and a runner offering the `ubuntu-latest` label (act_runner).
 
+The same pipelines exist for **GitHub Actions** in `.github/workflows/`. Keep both in sync; they differ in two places:
+
+| | Forgejo (`.forgejo/`) | GitHub (`.github/`) |
+|---|---|---|
+| Reaching `services:` | by service name (the job runs in a container) | `127.0.0.1` + mapped ports (the job runs on the VM) |
+| `actions/upload-artifact` | `@v3` (what act_runner supports) | `@v4` (v3 is shut down on GitHub) |
+| Runner | `ubuntu-latest` | `ubuntu-24.04` (pinned; `ubuntu-latest` moves to Ubuntu 26) |
+
 Layout: `src/send/send.service.ts` holds the single send pipeline and `src/policy/` the pure policy engine plus the Redis guardrails.
 The worker and its providers are in `src/worker/`, the admin API in `src/admin/`, and the schema and committed migrations in `prisma/`.
 See [`.env.example`](.env.example) for every configuration variable.
