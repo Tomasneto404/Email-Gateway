@@ -11,3 +11,6 @@ ui/dist/
 ui/test-results/
 ui/playwright-report/
 *.log
+# deploy/compose.yaml run from inside the repo: generated secrets and data
+deploy/secrets/
+deploy/data/

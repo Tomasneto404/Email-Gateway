@@ -15,3 +15,5 @@ playwright-report
 *.log
 # README screenshots are not needed in the image
 docs/images
+# the ready-to-run compose (and any data/secrets it created) is not part of the image
+deploy

@@ -47,7 +47,39 @@ The guardrails are the product:
 
 ---
 
-## Quickstart
+## Run it in one minute (prebuilt images)
+
+No clone needed. Get [`deploy/compose.yaml`](deploy/compose.yaml) and [`deploy/.env.example`](deploy/.env.example) into an empty folder and start it:
+
+```bash
+mkdir mail-gateway && cd mail-gateway
+base=https://raw.githubusercontent.com/Tomasneto404/mail-gateway/master/deploy
+curl -fsSLo compose.yaml $base/compose.yaml
+curl -fsSLo .env $base/.env.example   # optional: every setting has a default
+docker compose up -d --wait
+docker compose logs admin             # sign-in email and the generated password
+```
+
+Open <http://localhost:3000/ui>. Mailpit, the sandbox inbox, is at <http://localhost:8025>.
+
+- **Settings:** everything lives in `.env` (see [`deploy/.env.example`](deploy/.env.example)). Its values fill the compose file and are passed to the gateway, so any setting from the main `.env.example` can be added without editing `compose.yaml`.
+- **Folders:**
+
+  | Folder | Contents |
+  |---|---|
+  | `./secrets` | Generated on the first start: database password, encryption key and the first admin's password (`./secrets/admin_password`) |
+  | `./data/postgres`, `./data/redis`, `./data/mailpit` | The database, the queue/quotas and the sandbox inbox |
+
+  Back these folders up together. The secrets encrypt data in the database.
+- **First administrator:** `admin@example.com` unless you set `MG_ADMIN_EMAIL`. Migrations run before the API starts.
+- **Sandbox by default:** every key starts in sandbox mode and delivers to Mailpit, so nothing reaches a real inbox. For live keys, fill `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` and `SMTP_PASSWORD` (or Resend) in `.env`.
+- **Images:** `tomasneto26/mail_gateway` on Docker Hub by default.
+  - For a private registry, set `MG_IMAGE=registry.example.com/infra/mail-gateway` after `docker login`.
+  - To pin a version, set `MG_TAG=1.0.3`. To update, run `docker compose pull && docker compose up -d`.
+- **Network:** ports are published on `127.0.0.1` only (`MG_BIND`, `MG_HTTP_PORT`, `MG_MAILPIT_PORT`). Before exposing the gateway, put it behind HTTPS and set `COOKIE_SECURE=true` and `PUBLIC_URL`.
+- **Starting over:** `docker compose down`, then `sudo rm -rf data secrets`. The data folders belong to the containers' users, hence `sudo`.
+
+## Quickstart (from source)
 
 ```bash
 cp .env.example .env
