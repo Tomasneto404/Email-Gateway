@@ -23,7 +23,7 @@ test('every screen renders without CSP violations', async ({ page }) => {
   const firstKey = await page.request.get('/admin/keys?pageSize=1').then((r) => r.json());
   // the key detail screen needs a key; an empty database (fresh stack) skips it
   const keyId: string | undefined = firstKey.items[0]?.id;
-  const screens = ['', 'keys', ...(keyId ? [`keys/${keyId}`] : []), 'messages', 'approvals', 'users', 'roles', 'activity', 'settings'];
+  const screens = ['', 'keys', ...(keyId ? [`keys/${keyId}`] : []), 'messages', 'approvals', 'users', 'roles', 'templates', 'alerts', 'activity', 'settings'];
   for (const theme of ['light', 'dark']) {
     await page.evaluate((t) => localStorage.setItem('mg-theme', t), theme);
     for (const s of screens) {

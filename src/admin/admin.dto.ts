@@ -14,6 +14,43 @@ export class KeyUsageDto {
   @ApiProperty() day!: number;
 }
 
+export class WarmupStateDto {
+  @ApiProperty({ description: 'Day of the warm-up (1-based)' }) day!: number;
+  @ApiProperty() days!: number;
+  @ApiProperty({ description: 'Daily cap that applies today' }) dailyCap!: number;
+}
+
+export class DomainCheckItemDto {
+  @ApiProperty({ enum: ['pass', 'warn', 'fail'] }) status!: 'pass' | 'warn' | 'fail';
+  @ApiProperty({ type: String, nullable: true }) record!: string | null;
+  @ApiProperty() note!: string;
+}
+export class DmarcCheckDto extends DomainCheckItemDto {
+  @ApiProperty({ type: String, nullable: true }) policy!: string | null;
+}
+export class DkimCheckDto extends DomainCheckItemDto {
+  @ApiProperty({ type: String, nullable: true }) selector!: string | null;
+}
+export class DomainCheckDto {
+  @ApiProperty() domain!: string;
+  @ApiProperty({ enum: ['off', 'warn', 'enforce'] }) mode!: 'off' | 'warn' | 'enforce';
+  @ApiProperty() checkedAt!: string;
+  @ApiProperty({ type: DomainCheckItemDto }) spf!: DomainCheckItemDto;
+  @ApiProperty({ type: DmarcCheckDto }) dmarc!: DmarcCheckDto;
+  @ApiProperty({ type: DkimCheckDto }) dkim!: DkimCheckDto;
+  @ApiProperty({ description: 'SPF and DMARC do not fail' }) ok!: boolean;
+}
+
+export class AuditVerifyDto {
+  @ApiProperty() ok!: boolean;
+  @ApiProperty() checked!: number;
+  @ApiProperty({ type: String, nullable: true }) headSeq!: string | null;
+  @ApiProperty({ type: String, nullable: true }) headHash!: string | null;
+  @ApiProperty({ type: String, nullable: true }) anchorSeq!: string | null;
+  @ApiProperty({ type: String, nullable: true }) brokenAtSeq!: string | null;
+  @ApiProperty({ type: String, nullable: true }) reason!: string | null;
+}
+
 export class KeyDto {
   @ApiProperty() id!: string;
   @ApiProperty() name!: string;
@@ -32,6 +69,19 @@ export class KeyDto {
   @ApiProperty() attachmentsAllowed!: boolean;
   @ApiProperty() maxAttachmentBytes!: number;
   @ApiProperty({ enum: ['smtp', 'resend'], nullable: true, type: String }) liveProvider!: 'smtp' | 'resend' | null;
+  @ApiProperty({ type: [String], description: 'Source IPs/CIDRs allowed; empty = any' }) allowedIps!: string[];
+  @ApiProperty({ type: String, nullable: true }) expiresAt!: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Rotation grace: the previous secret works until then' }) previousSecretValidUntil!: string | null;
+  @ApiProperty({ type: [String] }) allowedLinkDomains!: string[];
+  @ApiProperty({ type: Number, nullable: true }) maxLinks!: number | null;
+  @ApiProperty() blockSecrets!: boolean;
+  @ApiProperty({ type: [String] }) allowedAttachmentTypes!: string[];
+  @ApiProperty() scanAttachments!: boolean;
+  @ApiProperty() templatesOnly!: boolean;
+  @ApiProperty({ type: [String] }) allowedTemplates!: string[];
+  @ApiProperty() warmup!: boolean;
+  @ApiProperty({ type: String, nullable: true, description: 'First time the key left sandbox' }) liveSince!: string | null;
+  @ApiProperty({ type: () => WarmupStateDto, nullable: true }) warmupState!: WarmupStateDto | null;
   @ApiProperty() prefixStale!: boolean;
   @ApiProperty({ type: String, nullable: true }) lastUsedAt!: string | null;
   @ApiProperty({ type: String, nullable: true }) rotatedAt!: string | null;
@@ -204,6 +254,7 @@ export class StatsOverviewDto {
   @ApiProperty() from!: string;
   @ApiProperty() to!: string;
   @ApiProperty({ type: TotalsDto }) totals!: TotalsDto;
+  @ApiProperty({ type: TotalsDto, description: 'Same totals for the period of equal length just before "from"' }) previousTotals!: TotalsDto;
   @ApiProperty({ type: [SeriesPointDto] }) series!: SeriesPointDto[];
   @ApiProperty({ type: [ReasonCountDto] }) rejectionsByReason!: ReasonCountDto[];
   @ApiProperty({ type: [TopKeyDto] }) topKeys!: TopKeyDto[];
@@ -313,6 +364,8 @@ export class InviteResultDto extends InviteLinkDto {
 
 export class AuditEntryDto {
   @ApiProperty() id!: string;
+  @ApiProperty({ description: 'Position in the tamper-evident chain' }) seq!: string;
+  @ApiProperty({ type: String, nullable: true }) hash!: string | null;
   @ApiProperty() at!: string;
   @ApiProperty({ enum: ['user', 'token', 'cli', 'system'] }) actorType!: string;
   @ApiProperty({ type: String, nullable: true }) actorId!: string | null;
@@ -355,6 +408,21 @@ export class SystemMailSettingsDto {
   @ApiProperty({ type: String, nullable: true }) from!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ['smtp', 'resend'] }) provider!: string | null;
 }
+export class DomainLimitDto {
+  @ApiProperty({ description: '"*" = every other domain' }) domain!: string;
+  @ApiProperty() perHour!: number;
+}
+
+export class AlertRulesDto {
+  @ApiProperty() rejectionSpike!: number;
+  @ApiProperty() failureSpike!: number;
+  @ApiProperty() spikeWindowMinutes!: number;
+  @ApiProperty() quotaPercent!: number;
+  @ApiProperty() approvalWaitMinutes!: number;
+  @ApiProperty() keyExpiryDays!: number;
+  @ApiProperty() cooldownMinutes!: number;
+}
+
 export class SettingsDto {
   @ApiProperty({ enum: ['smtp', 'resend'] }) liveProvider!: string;
   @ApiProperty({ type: SmtpSettingsDto }) smtp!: SmtpSettingsDto;
@@ -382,4 +450,11 @@ export class SettingsDto {
   @ApiProperty() sessionTtlHours!: number;
   @ApiProperty() sessionIdleMinutes!: number;
   @ApiProperty({ type: AuthentikSettingsDto }) authentik!: AuthentikSettingsDto;
+  @ApiProperty({ type: () => [DomainLimitDto] }) recipientDomainLimits!: DomainLimitDto[];
+  @ApiProperty({ type: [Number], description: 'Daily caps for day 1, 2, … after a key leaves sandbox' }) warmupSchedule!: number[];
+  @ApiProperty({ enum: ['off', 'warn', 'enforce'] }) senderDomainChecks!: 'off' | 'warn' | 'enforce';
+  @ApiProperty({ type: String, nullable: true }) clamav!: string | null;
+  @ApiProperty() bodiesEncrypted!: boolean;
+  @ApiProperty() auditChainKeyed!: boolean;
+  @ApiProperty({ type: () => AlertRulesDto }) alertRules!: AlertRulesDto;
 }

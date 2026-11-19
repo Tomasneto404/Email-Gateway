@@ -26,7 +26,14 @@ export type GatewayEvent =
   | 'system_mail_failed'
   | 'admin_action'
   | 'login_succeeded'
-  | 'login_failed';
+  | 'login_failed'
+  | 'alert_raised'
+  | 'alert_enqueue_failed'
+  | 'alert_failed'
+  | 'alert_delivery_failed'
+  | 'ip_not_allowed'
+  | 'key_expired'
+  | 'previous_key_used';
 
 export interface EventFields {
   keyName?: string;

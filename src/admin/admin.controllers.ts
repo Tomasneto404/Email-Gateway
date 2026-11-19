@@ -22,8 +22,12 @@ import { GatewayError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { Prisma } from '../generated/prisma/client';
 import { GatewayStateService } from '../gateway-state/gateway-state.service';
-import { CreateKeyDto, KEY_MODES, UpdateKeyDto } from '../keys/keys.dto';
-import { KeysService, toPolicyView } from '../keys/keys.service';
+import { AlertsService } from '../alerts/alerts.service';
+import { DomainCheckService } from '../keys/domain-check.service';
+import { CreateKeyDto, KEY_MODES, RotateKeyDto, UpdateKeyDto } from '../keys/keys.dto';
+import { parseDomainLimits, parseWarmupSchedule } from '../policy/sending-limits';
+import { AuditChainService } from './audit-chain.service';
+import { KeysService } from '../keys/keys.service';
 import { QuotaService } from '../policy/quota.service';
 import { SendAcceptedDto } from '../send/send.dto';
 import { SendService } from '../send/send.service';
@@ -35,6 +39,8 @@ import { auditWhere, parseAuditQuery, parseMessageQuery, qUuid } from './filters
 import type { CsvDelimiter } from '../common/csv';
 import {
   AuditListDto,
+  AuditVerifyDto,
+  DomainCheckDto,
   BulkResultDto,
   CreateRoleDto,
   GatewayStateDto,
@@ -94,6 +100,7 @@ export class AdminKeysController {
     private readonly quota: QuotaService,
     private readonly send: SendService,
     private readonly audit: AdminAuditService,
+    private readonly domains: DomainCheckService,
   ) {}
 
   @Get()
@@ -140,9 +147,20 @@ export class AdminKeysController {
   @ApiOperation({ operationId: 'adminGetKey' })
   @ApiOkResponse({ type: KeyWithUsageDto })
   async get(@Param('id') id: string) {
-    const k = toPolicyView(await this.keys.getActive(id));
+    const k = this.keys.view(await this.keys.getActive(id));
     const usage = (await this.quota.usage([id]))[id];
     return { ...k, usage };
+  }
+
+  @Get(':id/domain-check')
+  @RequirePermission('keys:read')
+  @ApiOperation({ operationId: 'adminKeyDomainCheck', summary: 'SPF / DMARC / DKIM of the key sender domain (SENDER_DOMAIN_CHECKS; cached 1 h, ?fresh=1 to recheck).' })
+  @ApiQuery({ name: 'fresh', required: false, enum: ['0', '1'] })
+  @ApiOkResponse({ type: DomainCheckDto })
+  async domainCheck(@Param('id') id: string, @Query('fresh') fresh?: string) {
+    if (this.domains.mode === 'off') throw new GatewayError('INVALID_STATE', 'Sender domain checks are off (SENDER_DOMAIN_CHECKS=off).');
+    const k = await this.keys.getActive(id);
+    return this.domains.check(k.fromAddress.slice(k.fromAddress.lastIndexOf('@') + 1), fresh === '1');
   }
 
   @Patch(':id')
@@ -170,10 +188,14 @@ export class AdminKeysController {
   @Post(':id/rotate')
   @HttpCode(200)
   @RequirePermission('keys:rotate')
-  @ApiOperation({ operationId: 'adminRotateKey', summary: 'Rotate the secret. The old secret stops working immediately; the new one is returned ONCE.' })
+  @ApiOperation({
+    operationId: 'adminRotateKey',
+    summary: 'Rotate the secret; the new one is returned ONCE. The old secret stops immediately, or after graceMinutes.',
+  })
+  @ApiBody({ type: RotateKeyDto, required: false })
   @ApiOkResponse({ type: KeyCreatedDto })
-  rotate(@Req() req: AdminRequest, @Param('id') id: string) {
-    return this.keys.rotate(id, req.actor);
+  rotate(@Req() req: AdminRequest, @Param('id') id: string, @Body() body: unknown) {
+    return this.keys.rotate(id, req.actor, body ?? {});
   }
 
   @Post(':id/enable')
@@ -542,7 +564,24 @@ export class AdminAuditController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly exports: ExportService,
+    private readonly chain: AuditChainService,
+    private readonly alerts: AlertsService,
   ) {}
+
+  @Get('verify')
+  @RequirePermission('audit:read')
+  @ApiOperation({
+    operationId: 'adminVerifyAudit',
+    summary: 'Integrity check of the activity log hash chain. Record headSeq/headHash elsewhere to also detect removal of the newest rows.',
+  })
+  @ApiOkResponse({ type: AuditVerifyDto })
+  async verify(): Promise<AuditVerifyDto> {
+    const r = await this.chain.verify();
+    if (!r.ok) {
+      await this.alerts.raise('audit_chain_broken', `Activity log integrity check failed at row ${r.brokenAtSeq}`, { reason: r.reason, row: r.brokenAtSeq, checked: r.checked }, 'on-demand');
+    }
+    return r;
+  }
 
   @Get()
   @RequirePermission('audit:read')
@@ -563,11 +602,13 @@ export class AdminAuditController {
     const pageSize = Math.min(200, Math.max(1, q.pageSize ?? 50));
     const where = auditWhere(q);
     const order = q.order ?? 'desc';
-    const [items, total, actions] = await Promise.all([
-      this.prisma.adminAudit.findMany({ where, orderBy: [{ at: order }, { id: order }], skip: (page - 1) * pageSize, take: pageSize }),
+    const [rows, total, actions] = await Promise.all([
+      this.prisma.adminAudit.findMany({ where, orderBy: [{ at: order }, { seq: order }], skip: (page - 1) * pageSize, take: pageSize }),
       this.prisma.adminAudit.count({ where }),
       this.prisma.adminAudit.findMany({ distinct: ['action'], select: { action: true }, orderBy: { action: 'asc' } }),
     ]);
+    // BigInt is not JSON: the chain fields are exposed as strings.
+    const items = rows.map(({ seq, prevHash: _p, ...r }) => ({ ...r, seq: String(seq) }));
     return { items, total, page, pageSize, actions: actions.map((a) => a.action) };
   }
 
@@ -626,6 +667,21 @@ export class AdminSettingsController {
       sessionTtlHours: c.SESSION_TTL_HOURS,
       sessionIdleMinutes: c.SESSION_IDLE_MINUTES,
       authentik: { enabled: c.AUTHENTIK_ENABLED, issuer: c.AUTHENTIK_ISSUER ?? null, scopes: c.AUTHENTIK_SCOPES, groupsClaim: c.AUTHENTIK_GROUPS_CLAIM },
+      recipientDomainLimits: [...parseDomainLimits(c.RECIPIENT_DOMAIN_LIMITS)].map(([domain, perHour]) => ({ domain, perHour })),
+      warmupSchedule: parseWarmupSchedule(c.WARMUP_SCHEDULE),
+      senderDomainChecks: c.SENDER_DOMAIN_CHECKS,
+      clamav: c.CLAMAV_HOST ? `${c.CLAMAV_HOST}:${c.CLAMAV_PORT}` : null,
+      bodiesEncrypted: !!c.APP_ENCRYPTION_KEY,
+      auditChainKeyed: !!c.APP_ENCRYPTION_KEY,
+      alertRules: {
+        rejectionSpike: c.ALERT_REJECTION_SPIKE,
+        failureSpike: c.ALERT_FAILURE_SPIKE,
+        spikeWindowMinutes: c.ALERT_SPIKE_WINDOW_MINUTES,
+        quotaPercent: c.ALERT_QUOTA_PERCENT,
+        approvalWaitMinutes: c.ALERT_APPROVAL_WAIT_MINUTES,
+        keyExpiryDays: c.ALERT_KEY_EXPIRY_DAYS,
+        cooldownMinutes: c.ALERT_COOLDOWN_MINUTES,
+      },
     };
   }
 }

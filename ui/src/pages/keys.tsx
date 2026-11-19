@@ -11,6 +11,7 @@ import {
   useSetKeyEnabled,
   useSettings,
   useStats,
+  useTemplates,
   useUpdateKey,
   type Key,
   type KeyListParams,
@@ -22,6 +23,7 @@ import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
 import { VolumeChart } from '@/components/dashboard/charts';
 import { DataTable, type Column } from '@/components/data-table/data-table';
 import { CreateKeyWizard } from '@/components/keys/create-key-wizard';
+import { DomainCheckCard } from '@/components/keys/domain-check-card';
 import { PolicyEditor } from '@/components/keys/policy-editor';
 import { Segmented } from '@/components/keys/segmented';
 import { SecretReveal } from '@/components/keys/secret-reveal';
@@ -81,7 +83,7 @@ export function KeysPage() {
   return (
     <>
       <PageHeader title="API keys" description="Each key carries its own sending policy" actions={can('keys:create') && <CreateKeyWizard />} />
-      <div className="flex flex-wrap items-center gap-2 border-b px-8 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b px-4 sm:px-8 py-3">
         <Input placeholder="Filter by name" className="h-8 w-56" defaultValue={search.q} onChange={(e) => set({ q: e.target.value || undefined })} />
         <Segmented
           label="Mode filter"
@@ -129,13 +131,16 @@ export function KeyDetailPage() {
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [secretAck, setSecretAck] = useState(false);
   const [from] = useState(() => new Date(Date.now() - 24 * 3600_000).toISOString());
+  const [grace, setGrace] = useState('0');
   const stats = useStats({ keyId, from, bucket: 'hour' });
   const recent = useMessages({ keyId, pageSize: 10 });
+  const templates = useTemplates(can('templates:read'));
+  const domainMode = settings.data?.senderDomainChecks;
 
   if (error) return <EmptyState title="Key not found" description="It may have been deleted" />;
   if (isLoading || !k)
     return (
-      <div className="grid gap-3 px-8 py-6">
+      <div className="grid gap-3 px-4 sm:px-8 py-6">
         <Skeleton className="h-6 w-60" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -160,6 +165,8 @@ export function KeyDetailPage() {
           <>
             <span className="font-mono text-xs">{k.keyPrefix}</span> · created {fmtShort(k.createdAt)} · last used {fmtAgo(k.lastUsedAt)}
             {k.prefixStale && <span className="text-warning-foreground ml-2">Prefix no longer matches the mode, rotate to get a {k.mode === 'sandbox' ? 'mk_sbx_' : 'mk_live_'} key</span>}
+            {k.previousSecretValidUntil && <span className="text-warning-foreground ml-2">Previous secret still works until {fmtShort(k.previousSecretValidUntil)}</span>}
+            {k.expiresAt && <span className={cn('ml-2', new Date(k.expiresAt) < new Date() ? 'text-destructive' : 'text-secondary-foreground')}>· expires {fmtShort(k.expiresAt)}</span>}
           </>
         }
         actions={
@@ -247,7 +254,7 @@ export function KeyDetailPage() {
           </>
         }
       />
-      <div className="grid w-full max-w-[1440px] gap-6 px-8 py-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid w-full max-w-[1440px] gap-6 px-4 sm:px-8 py-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         <Card>
           <CardHeader>
             <CardTitle>Policy</CardTitle>
@@ -259,11 +266,14 @@ export function KeyDetailPage() {
               canUpdate={can('keys:update')}
               canPromote={can('keys:promote')}
               providers={settings.data ? { smtp: settings.data.smtp.enabled, resend: settings.data.resend.enabled } : undefined}
+              templates={templates.data?.items.map((t) => t.name)}
+              clamav={settings.data?.clamav}
               onSave={(patch) => update.mutateAsync(patch)}
             />
           </CardContent>
         </Card>
         <div className="grid content-start gap-6">
+          {domainMode && domainMode !== 'off' && <DomainCheckCard keyId={keyId} mode={domainMode} />}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Last 24 hours</CardTitle>
@@ -278,10 +288,10 @@ export function KeyDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-secondary-foreground text-xs">Today</dt>
+                  <dt className="text-secondary-foreground text-xs">Today{k.warmupState && k.warmupState.dailyCap < k.quotaPerDay ? ` · warm-up day ${k.warmupState.day}` : ''}</dt>
                   <dd className="tabular mt-1 text-xl leading-7 font-medium">
                     {fmtNum(k.usage.day)}
-                    <span className="text-muted-foreground text-sm font-normal"> / {fmtNum(k.quotaPerDay)}</span>
+                    <span className="text-muted-foreground text-sm font-normal"> / {fmtNum(k.warmupState ? Math.min(k.quotaPerDay, k.warmupState.dailyCap) : k.quotaPerDay)}</span>
                   </dd>
                 </div>
               </dl>
@@ -319,16 +329,37 @@ export function KeyDetailPage() {
         open={dialog === 'rotate'}
         onOpenChange={(o) => !o && setDialog(null)}
         title={`Rotate "${k.name}"?`}
-        description="The current secret stops working immediately. Every client using it must be updated."
+        description={
+          grace === '0'
+            ? 'The current secret stops working immediately. Every client using it must be updated.'
+            : 'The current secret keeps working during the grace period, so clients can switch without downtime.'
+        }
         confirmLabel="Rotate secret"
         destructive
         typeToConfirm={k.name}
         onConfirm={async () => {
-          const r = await rotate.mutateAsync();
+          const r = await rotate.mutateAsync(Number(grace));
           setSecretAck(false);
           setNewSecret(r.secret);
+          setGrace('0');
         }}
-      />
+      >
+        <div className="grid gap-1.5">
+          <span className="text-sm font-medium">Old secret keeps working</span>
+          <Segmented
+            label="Grace period"
+            size="sm"
+            value={grace}
+            onChange={setGrace}
+            options={[
+              { value: '0', label: 'No' },
+              { value: '15', label: '15 min' },
+              { value: '60', label: '1 hour' },
+              { value: '1440', label: '1 day' },
+            ]}
+          />
+        </div>
+      </ConfirmDialog>
       <ConfirmDialog
         open={dialog === 'disable'}
         onOpenChange={(o) => !o && setDialog(null)}

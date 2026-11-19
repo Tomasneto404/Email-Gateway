@@ -5,6 +5,7 @@ import { APP_CONFIG, AppConfig } from '../config/config';
 import { GatewayError } from '../common/errors';
 import { REDIS } from '../common/redis';
 import { windows } from '../common/time';
+import { WarmupState, domainCounts, parseDomainLimits } from './sending-limits';
 
 /**
  * Atomic check-and-increment over three fixed UTC windows:
@@ -27,15 +28,35 @@ if g == 1 then redis.call('EXPIRE', KEYS[3], ARGV[4]) end
 return {1, h, d, g}
 `;
 
+/**
+ * Per recipient-domain hourly caps: KEYS = one counter per domain, ARGV = (count, limit) pairs then TTL.
+ * All-or-nothing; returns 0 when everything fits, else the 1-based index of the first domain over its cap.
+ */
+const DOMAINS_LUA = `
+for i = 1, #KEYS do
+  local cur = tonumber(redis.call('GET', KEYS[i]) or '0')
+  if cur + tonumber(ARGV[i * 2 - 1]) > tonumber(ARGV[i * 2]) then return i end
+end
+for i = 1, #KEYS do
+  local v = redis.call('INCRBY', KEYS[i], ARGV[i * 2 - 1])
+  if v == tonumber(ARGV[i * 2 - 1]) then redis.call('EXPIRE', KEYS[i], ARGV[#ARGV]) end
+end
+return 0
+`;
+
 export interface QuotaLimits {
   keyId: string;
   keyName: string;
   quotaPerHour: number;
   quotaPerDay: number;
+  /** set while the key is warming up: quotaPerDay is then the warm-up cap */
+  warmup?: WarmupState | null;
 }
 
 export interface QuotaTicket {
   keys: [string, string, string];
+  /** recipient-domain counters to give back on rollback */
+  domains?: Array<{ key: string; count: number }>;
 }
 
 export interface QuotaUsage {
@@ -81,8 +102,10 @@ export class QuotaService {
     if (status === -2) {
       throw new GatewayError(
         'QUOTA_EXCEEDED',
-        `Key "${l.keyName}" reached its daily quota of ${l.quotaPerDay} messages. Do not retry before the window resets in ${w.dayResetSeconds}s (00:00 UTC).`,
-        { window: 'day', limit: l.quotaPerDay, retryAfterSeconds: w.dayResetSeconds },
+        l.warmup
+          ? `Key "${l.keyName}" is warming up (day ${l.warmup.day} of ${l.warmup.days}) and reached today's cap of ${l.quotaPerDay} messages. The cap grows every day; do not retry before ${w.dayResetSeconds}s (00:00 UTC).`
+          : `Key "${l.keyName}" reached its daily quota of ${l.quotaPerDay} messages. Do not retry before the window resets in ${w.dayResetSeconds}s (00:00 UTC).`,
+        { window: 'day', limit: l.quotaPerDay, retryAfterSeconds: w.dayResetSeconds, ...(l.warmup ? { warmup: l.warmup } : {}) },
       );
     }
     if (status === -3) {
@@ -95,9 +118,38 @@ export class QuotaService {
     return { keys };
   }
 
+  /**
+   * Recipient-domain hourly caps (RECIPIENT_DOMAIN_LIMITS), shared by every key. Adds the counters
+   * to the ticket so a later rejection gives them back.
+   */
+  async consumeDomains(ticket: QuotaTicket, recipients: string[], now = new Date()): Promise<void> {
+    const entries = domainCounts(recipients, this.domainLimits);
+    if (!entries.length) return;
+    const w = windows(now);
+    const keys = entries.map((e) => `mg:qd:${e.domain}:h:${w.hour}`);
+    const args = entries.flatMap((e) => [e.count, e.limit]);
+    const over = (await this.redis.eval(DOMAINS_LUA, keys.length, ...keys, ...args, w.hourResetSeconds + 60)) as number;
+    if (over > 0) {
+      const e = entries[over - 1];
+      throw new GatewayError(
+        'DOMAIN_RATE_LIMITED',
+        `The gateway reached its hourly limit of ${e.limit} recipients at ${e.domain} (shared by all keys, protects the sender reputation). Retry after ${w.hourResetSeconds}s.`,
+        { domain: e.domain, limit: e.limit, retryAfterSeconds: w.hourResetSeconds },
+      );
+    }
+    ticket.domains = entries.map((e, i) => ({ key: keys[i], count: e.count }));
+  }
+
+  get domainLimits(): Map<string, number> {
+    return (this._domainLimits ??= parseDomainLimits(this.cfg.RECIPIENT_DOMAIN_LIMITS));
+  }
+  private _domainLimits?: Map<string, number>;
+
   /** Undo a successful consume() when a later pipeline step rejects the message. */
   async rollback(t: QuotaTicket): Promise<void> {
-    await this.redis.multi().decr(t.keys[0]).decr(t.keys[1]).decr(t.keys[2]).exec();
+    const m = this.redis.multi().decr(t.keys[0]).decr(t.keys[1]).decr(t.keys[2]);
+    for (const d of t.domains ?? []) m.decrby(d.key, d.count);
+    await m.exec();
   }
 
   async usage(keyIds: string[], now = new Date()): Promise<Record<string, QuotaUsage>> {

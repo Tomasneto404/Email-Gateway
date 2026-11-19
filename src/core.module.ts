@@ -2,6 +2,10 @@
 import { DynamicModule, Global, Module } from '@nestjs/common';
 import type { Logger } from 'pino';
 import { AdminAuditService } from './admin/admin-audit.service';
+import { AlertsService } from './alerts/alerts.service';
+import { AuditChainService } from './admin/audit-chain.service';
+import { SecretBox } from './auth/crypto';
+import { BodyCrypto } from './common/body-crypto';
 import { APP_CONFIG, AppConfig } from './config/config';
 import { EventLogger } from './common/event-logger';
 import { ROOT_LOGGER } from './common/logger';
@@ -29,6 +33,10 @@ const SHARED = [
   GatewayStateService,
   MessagesRepository,
   HealthService,
+  SecretBox,
+  BodyCrypto,
+  AuditChainService,
+  AlertsService,
 ];
 
 /** Shared infrastructure for api, worker and CLI. */

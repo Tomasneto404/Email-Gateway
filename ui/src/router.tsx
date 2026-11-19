@@ -12,7 +12,9 @@ import { DashboardPage } from '@/pages/dashboard';
 import { KeyDetailPage, KeysPage } from '@/pages/keys';
 import { InvitePage, LoginPage } from '@/pages/login';
 import { ApprovalsPage, MessagesPage } from '@/pages/messages';
+import { AlertsPage } from '@/pages/alerts';
 import { SettingsPage } from '@/pages/settings';
+import { TemplatesPage } from '@/pages/templates';
 import { UsersPage } from '@/pages/users';
 
 /** Keeps only known, well-typed search params (URL is the source of truth for table state). */
@@ -119,6 +121,8 @@ const routes = [
     component: ActivityPage,
   }),
   createRoute({ getParentRoute: () => appRoute, path: 'settings', beforeLoad: requirePerm('settings:read'), component: SettingsPage }),
+  createRoute({ getParentRoute: () => appRoute, path: 'templates', beforeLoad: requirePerm('templates:read'), component: TemplatesPage }),
+  createRoute({ getParentRoute: () => appRoute, path: 'alerts', beforeLoad: requirePerm('alerts:read'), component: AlertsPage }),
 ];
 
 const routeTree = rootRoute.addChildren([loginRoute, inviteRoute, appRoute.addChildren(routes)]);

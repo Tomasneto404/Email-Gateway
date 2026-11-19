@@ -1,13 +1,14 @@
 // Authored by Tomás Neto (TN 2026)
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
-import { ApiCookieAuth, ApiOkResponse, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { ApiBody, ApiCookieAuth, ApiOkResponse, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AdminAuditService } from '../admin/admin-audit.service';
 import { AdminAuthGuard, AdminRequest, Authenticated, sameOrigin } from '../admin/admin-auth.guard';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { GatewayError } from '../common/errors';
 import { clientIp } from '../common/http';
-import { AuthService } from './auth.service';
+import { AuthService, secondFactorMethods, secondFactorStep } from './auth.service';
+import { PasskeysService } from './passkeys.service';
 import { AuthentikService } from './authentik.service';
 import { SessionsService } from './sessions.service';
 import { UsersService, toUserView } from './users.service';
@@ -32,10 +33,14 @@ class AuthConfigDto {
 }
 class LoginResultDto {
   @ApiProperty({
-    enum: ['done', 'totp_enroll', 'totp_verify'],
-    description: 'done: signed in (no 2FA for this user). totp_verify: enter the TOTP code. totp_enroll: 2FA is mandatory and must be set up now.',
+    enum: ['done', 'totp_enroll', 'totp_verify', 'second_factor'],
+    description:
+      'done: signed in (no 2FA for this user). totp_verify: enter the TOTP code. totp_enroll: 2FA is mandatory and must be set up now. ' +
+      'second_factor: the user has a passkey; use one of `methods` (passkey via /admin/auth/passkey/*, totp via /admin/auth/totp/verify).',
   })
-  next!: 'done' | 'totp_enroll' | 'totp_verify';
+  next!: 'done' | 'totp_enroll' | 'totp_verify' | 'second_factor';
+  @ApiPropertyOptional({ type: [String], enum: ['passkey', 'totp'], description: 'Second-factor methods available (when next is not done)' })
+  methods?: Array<'passkey' | 'totp'>;
   @ApiPropertyOptional({ type: () => UserDto, description: 'Present when next=done' }) user?: UserDto;
   @ApiPropertyOptional({ description: 'Present when next=done' }) csrfToken?: string;
 }
@@ -57,6 +62,31 @@ class InviteInfoDto {
 class OkDto {
   @ApiProperty() ok!: boolean;
 }
+class ChangePasswordBody {
+  @ApiProperty() currentPassword!: string;
+  @ApiProperty({ description: 'At least 12 characters' }) newPassword!: string;
+}
+class PasswordChangedDto {
+  @ApiProperty({ description: 'Other sessions that were signed out' }) otherSessionsRevoked!: number;
+}
+class AccountSessionDto {
+  @ApiProperty({ description: 'Opaque session id (hash of the cookie)' }) id!: string;
+  @ApiProperty() current!: boolean;
+  @ApiProperty({ type: String, nullable: true }) ip!: string | null;
+  @ApiProperty({ type: String, nullable: true }) userAgent!: string | null;
+  @ApiProperty() createdAt!: string;
+  @ApiProperty() lastSeenAt!: string;
+  @ApiProperty() expiresAt!: string;
+}
+class RevokedDto {
+  @ApiProperty() revoked!: number;
+}
+class PasskeyDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty() createdAt!: string;
+  @ApiProperty({ type: String, nullable: true }) lastUsedAt!: string | null;
+}
 
 const meta = (req: Request) => ({ ip: clientIp(req), userAgent: req.headers['user-agent'] });
 
@@ -71,6 +101,7 @@ export class AuthController {
     private readonly users: UsersService,
     private readonly authentik: AuthentikService,
     private readonly audit: AdminAuditService,
+    private readonly passkeys: PasskeysService,
   ) {}
 
   private requireOrigin(req: Request) {
@@ -105,7 +136,31 @@ export class AuthController {
       return { next: 'done', user: toUserView(await this.users.getFull(r.user.id)), csrfToken: r.session.csrfToken };
     }
     this.sessions.setCookie(res, r.token, false);
-    return { next: r.next };
+    return r.next === 'second_factor' ? { next: r.next, methods: r.methods } : { next: r.next };
+  }
+
+  @Post('passkey/options')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'authPasskeyOptions', summary: 'Step 2 with a passkey: WebAuthn request options for navigator.credentials.get().' })
+  @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
+  async passkeyOptions(@Req() req: Request) {
+    this.requireOrigin(req);
+    const { session, user } = await this.partial(req);
+    if (session.mfaPassed) throw new GatewayError('INVALID_STATE', 'Already verified.');
+    return this.passkeys.authenticationOptions(user, session.idHash, req);
+  }
+
+  @Post('passkey/verify')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'authPasskeyVerify', summary: 'Step 2 with a passkey: verify the assertion. Issues the full session cookie.' })
+  @ApiBody({ schema: { type: 'object', properties: { response: { type: 'object', additionalProperties: true } }, required: ['response'] } })
+  @ApiOkResponse({ type: SessionDto })
+  async passkeyVerify(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: { response?: unknown }): Promise<SessionDto> {
+    this.requireOrigin(req);
+    const { session, user } = await this.partial(req);
+    const full = await this.auth.verifyPasskey(session, user, body?.response, req, meta(req));
+    this.sessions.setCookie(res, full.token, true);
+    return { user: toUserView(await this.users.getFull(user.id)), csrfToken: full.session.csrfToken };
   }
 
   @Post('totp/enroll')
@@ -136,7 +191,10 @@ export class AuthController {
   async session(@Req() req: Request): Promise<SessionDto> {
     const r = await this.sessions.resolve(this.sessions.readToken(req));
     if (!r) throw new GatewayError('UNAUTHORIZED', 'Not logged in.');
-    if (!r.session.mfaPassed) throw new GatewayError('MFA_REQUIRED', 'Complete two-factor authentication.', { next: r.user.totpEnrolled ? 'totp_verify' : 'totp_enroll' });
+    if (!r.session.mfaPassed) {
+      const n = await this.passkeys.count(r.user.id);
+      throw new GatewayError('MFA_REQUIRED', 'Complete two-factor authentication.', { next: secondFactorStep(r.user, n), methods: secondFactorMethods(r.user, n) });
+    }
     return { user: toUserView(r.user), csrfToken: r.session.csrfToken };
   }
 
@@ -217,7 +275,73 @@ export class AccountController {
   constructor(
     private readonly auth: AuthService,
     private readonly users: UsersService,
+    private readonly sessions: SessionsService,
+    private readonly passkeys: PasskeysService,
   ) {}
+
+  @Post('password')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'accountChangePassword', summary: 'Change your password (local accounts). Your other sessions are signed out.' })
+  @ApiBody({ type: ChangePasswordBody })
+  @ApiOkResponse({ type: PasswordChangedDto })
+  async changePassword(@Req() req: AdminRequest, @Body() body: ChangePasswordBody) {
+    return this.auth.changePassword(await this.me(req), body?.currentPassword, body?.newPassword, req.sessionIdHash, meta(req));
+  }
+
+  @Get('sessions')
+  @ApiOperation({ operationId: 'accountSessions', summary: 'Your active sessions' })
+  @ApiOkResponse({ type: [AccountSessionDto] })
+  async listSessions(@Req() req: AdminRequest) {
+    const user = await this.me(req);
+    return this.sessions.listForUser(user.id, req.sessionIdHash);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(204)
+  @ApiOperation({ operationId: 'accountRevokeSession', summary: 'Sign out one of your sessions' })
+  async revokeSession(@Req() req: AdminRequest, @Param('id') id: string) {
+    const user = await this.me(req);
+    await this.sessions.revokeForUser(user.id, id);
+  }
+
+  @Post('sessions/revoke-others')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'accountRevokeOtherSessions', summary: 'Sign out everywhere except here' })
+  @ApiOkResponse({ type: RevokedDto })
+  async revokeOthers(@Req() req: AdminRequest) {
+    const user = await this.me(req);
+    return { revoked: await this.sessions.revokeOthers(user.id, req.sessionIdHash) };
+  }
+
+  @Get('passkeys')
+  @ApiOperation({ operationId: 'accountPasskeys' })
+  @ApiOkResponse({ type: [PasskeyDto] })
+  async listPasskeys(@Req() req: AdminRequest) {
+    return this.passkeys.list((await this.me(req)).id);
+  }
+
+  @Post('passkeys/options')
+  @HttpCode(200)
+  @ApiOperation({ operationId: 'accountPasskeyOptions', summary: 'WebAuthn creation options for navigator.credentials.create().' })
+  @ApiOkResponse({ schema: { type: 'object', additionalProperties: true } })
+  async passkeyOptions(@Req() req: AdminRequest) {
+    return this.passkeys.registrationOptions(await this.me(req), req);
+  }
+
+  @Post('passkeys')
+  @ApiOperation({ operationId: 'accountAddPasskey', summary: 'Register the passkey created by the browser. It then works as a second factor.' })
+  @ApiBody({ schema: { type: 'object', properties: { response: { type: 'object', additionalProperties: true }, name: { type: 'string' } }, required: ['response'] } })
+  @ApiOkResponse({ type: PasskeyDto })
+  async addPasskey(@Req() req: AdminRequest, @Body() body: { response?: unknown; name?: unknown }) {
+    return this.passkeys.register(await this.me(req), body?.response, body?.name, req, clientIp(req));
+  }
+
+  @Delete('passkeys/:id')
+  @HttpCode(204)
+  @ApiOperation({ operationId: 'accountRemovePasskey' })
+  async removePasskey(@Req() req: AdminRequest, @Param('id') id: string) {
+    await this.passkeys.remove(await this.me(req), id, clientIp(req));
+  }
 
   private async me(req: AdminRequest) {
     if (req.actor.type !== 'user' || !req.actor.id) throw new GatewayError('FORBIDDEN', 'Only signed-in users have an account.');

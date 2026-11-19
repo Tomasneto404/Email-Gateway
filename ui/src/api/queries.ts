@@ -75,7 +75,15 @@ export const useCreateKey = () =>
 export const useUpdateKey = (id: string) =>
   useAction((body: UpdateKey) => call(api.PATCH('/admin/keys/{id}', { params: { path: { id } }, body })), { invalidate: [['keys']], success: 'Policy saved' });
 export const useRotateKey = (id: string) =>
-  useAction(() => call(api.POST('/admin/keys/{id}/rotate', { params: { path: { id } } })), { invalidate: [['keys']] });
+  useAction((graceMinutes: number = 0) => call(api.POST('/admin/keys/{id}/rotate', { params: { path: { id } }, body: { graceMinutes } })), { invalidate: [['keys']] });
+export const useDomainCheck = (id: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['keys', id, 'domain-check'],
+    queryFn: () => call(api.GET('/admin/keys/{id}/domain-check', { params: { path: { id } } })),
+    enabled,
+    retry: false,
+    staleTime: 300_000,
+  });
 export const useSetKeyEnabled = (id: string) =>
   useAction(
     (enabled: boolean) =>
@@ -174,6 +182,67 @@ export const useUpdateRole = () =>
   });
 export const useDeleteRole = () =>
   useAction((id: string) => call(api.DELETE('/admin/roles/{id}', { params: { path: { id } } })), { invalidate: [['roles'], ['users'], ['session']], success: 'Role deleted' });
+
+export const useVerifyAudit = () => useMutation({ mutationFn: () => call(api.GET('/admin/audit/verify')), onError: (e) => toast.error(errorMessage(e)) });
+
+// ---------------------------------------------------------------- templates
+export type TemplateT = Schemas['TemplateDto'];
+export const useTemplates = (enabled = true) => useQuery({ queryKey: ['templates'], queryFn: () => call(api.GET('/admin/templates')), enabled });
+export const useCreateTemplate = () =>
+  useAction((body: Schemas['CreateTemplateDto']) => call(api.POST('/admin/templates', { body })), { invalidate: [['templates']], success: 'Template created' });
+export const useUpdateTemplate = () =>
+  useAction((v: { id: string; body: Schemas['UpdateTemplateDto'] }) => call(api.PATCH('/admin/templates/{id}', { params: { path: { id: v.id } }, body: v.body })), {
+    invalidate: [['templates'], ['keys']],
+    success: 'Template saved',
+  });
+export const useDeleteTemplate = () =>
+  useAction((id: string) => call(api.DELETE('/admin/templates/{id}', { params: { path: { id } } })), { invalidate: [['templates']], success: 'Template deleted' });
+export const previewTemplate = (id: string, variables: Record<string, string>) =>
+  call(api.POST('/admin/templates/{id}/preview', { params: { path: { id } }, body: { variables } }));
+
+// ---------------------------------------------------------------- alerts
+export type AlertChannelT = Schemas['AlertChannelDto'];
+export const useAlertTypes = () => useQuery({ queryKey: ['alerts', 'types'], queryFn: () => call(api.GET('/admin/alerts/types')), staleTime: Infinity });
+export const useAlertChannels = () => useQuery({ queryKey: ['alerts', 'channels'], queryFn: () => call(api.GET('/admin/alerts/channels')) });
+export const useAlertEvents = (page: number) =>
+  useQuery({
+    queryKey: ['alerts', 'events', page],
+    queryFn: () => call(api.GET('/admin/alerts/events', { params: { query: { page, pageSize: 25 } } })),
+    placeholderData: keepPreviousData,
+    refetchInterval: 15_000,
+  });
+export const useCreateAlertChannel = () =>
+  useAction((body: Schemas['CreateAlertChannelDto']) => call(api.POST('/admin/alerts/channels', { body })), { invalidate: [['alerts']] });
+export const useUpdateAlertChannel = () =>
+  useAction((v: { id: string; body: Schemas['UpdateAlertChannelDto'] }) => call(api.PATCH('/admin/alerts/channels/{id}', { params: { path: { id: v.id } }, body: v.body })), {
+    invalidate: [['alerts']],
+    success: 'Channel saved',
+  });
+export const useDeleteAlertChannel = () =>
+  useAction((id: string) => call(api.DELETE('/admin/alerts/channels/{id}', { params: { path: { id } } })), { invalidate: [['alerts']], success: 'Channel deleted' });
+export const useTestAlertChannel = () =>
+  useAction((id: string) => call(api.POST('/admin/alerts/channels/{id}/test', { params: { path: { id } } })), {
+    invalidate: [['alerts']],
+    success: 'Test alert queued',
+  });
+
+// ---------------------------------------------------------------- account security
+export const useChangePassword = () =>
+  useAction((body: { currentPassword: string; newPassword: string }) => call(api.POST('/admin/account/password', { body })), {
+    invalidate: [['account', 'sessions']],
+    success: (r) => `Password changed${r.otherSessionsRevoked ? `, ${r.otherSessionsRevoked} other session${r.otherSessionsRevoked === 1 ? '' : 's'} signed out` : ''}`,
+  });
+export const useAccountSessions = (enabled = true) => useQuery({ queryKey: ['account', 'sessions'], queryFn: () => call(api.GET('/admin/account/sessions')), enabled });
+export const useRevokeSession = () =>
+  useAction((id: string) => call(api.DELETE('/admin/account/sessions/{id}', { params: { path: { id } } })), { invalidate: [['account', 'sessions']], success: 'Session signed out' });
+export const useRevokeOtherSessions = () =>
+  useAction(() => call(api.POST('/admin/account/sessions/revoke-others')), {
+    invalidate: [['account', 'sessions']],
+    success: (r) => `${r.revoked} session${r.revoked === 1 ? '' : 's'} signed out`,
+  });
+export const usePasskeys = (enabled = true) => useQuery({ queryKey: ['account', 'passkeys'], queryFn: () => call(api.GET('/admin/account/passkeys')), enabled });
+export const useRemovePasskey = () =>
+  useAction((id: string) => call(api.DELETE('/admin/account/passkeys/{id}', { params: { path: { id } } })), { invalidate: [['account', 'passkeys']], success: 'Passkey removed' });
 
 /** Name lookups for filter chips (optional, permission-dependent). */
 export const useUsersLookup = (enabled: boolean) => useQuery({ queryKey: ['users'], queryFn: () => call(api.GET('/admin/users')), enabled });

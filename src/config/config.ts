@@ -1,6 +1,7 @@
 // Authored by Tomás Neto (TN 2026)
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
+import { parseDomainLimits, parseWarmupSchedule } from '../policy/sending-limits';
 
 /**
  * Docker secrets support: for every `FOO_FILE=/run/secrets/foo` env var, read the file
@@ -129,6 +130,34 @@ export const configSchema = z.object({
   /** Maximum rows per CSV export (protects the database; narrow the filters for more). */
   EXPORT_MAX_ROWS: int(100_000, 1),
 
+  /**
+   * Per recipient-domain hourly caps for live/approval mail, all keys combined:
+   * "gmail.com=200,outlook.com=200,*=1000" (`*` = every other domain; 0 or absent = unlimited).
+   */
+  RECIPIENT_DOMAIN_LIMITS: z.string().default(''),
+  /** Daily caps for the first days after a key leaves sandbox (warm-up), e.g. "50,100,250,500,1000". Empty = off. */
+  WARMUP_SCHEDULE: z.string().default('50,100,250,500,1000,2500,5000'),
+
+  /** SPF / DKIM / DMARC checks of each key's sender domain: off | warn (shown in the UI) | enforce (blocks going live). */
+  SENDER_DOMAIN_CHECKS: z.enum(['off', 'warn', 'enforce']).default('off'),
+  /** DKIM selectors to look for (<selector>._domainkey.<domain>). */
+  DKIM_SELECTORS: z.string().default('default,mail,dkim,selector1,selector2,google,k1,s1,s2,resend,smtp'),
+
+  /** ClamAV daemon for keys with scanAttachments (INSTREAM over TCP). */
+  CLAMAV_HOST: optStr,
+  CLAMAV_PORT: int(3310, 1),
+  CLAMAV_TIMEOUT_MS: int(15_000, 1000),
+
+  /** Alert rules (evaluated every minute by the worker). */
+  ALERT_REJECTION_SPIKE: int(50, 1),
+  ALERT_FAILURE_SPIKE: int(10, 1),
+  ALERT_SPIKE_WINDOW_MINUTES: int(15, 1),
+  ALERT_QUOTA_PERCENT: int(80, 1),
+  ALERT_APPROVAL_WAIT_MINUTES: int(30, 1),
+  ALERT_KEY_EXPIRY_DAYS: int(7, 1),
+  /** The same alert (same rule + subject) is not repeated within this window. */
+  ALERT_COOLDOWN_MINUTES: int(60, 1),
+
   DEFAULT_QUOTA_PER_HOUR: int(50),
   DEFAULT_QUOTA_PER_DAY: int(200),
   DEFAULT_MAX_RECIPIENTS: int(10, 1),
@@ -177,6 +206,16 @@ export function buildConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
   for (const k of ['AUTHENTIK_ISSUER'] as const) {
     if (cfg[k] && !/^https?:\/\//.test(cfg[k]!)) problems.push(`${k}: must start with https:// (got "${cfg[k]}")`);
+  }
+  for (const [name, parse] of [
+    ['RECIPIENT_DOMAIN_LIMITS', () => parseDomainLimits(cfg.RECIPIENT_DOMAIN_LIMITS)],
+    ['WARMUP_SCHEDULE', () => parseWarmupSchedule(cfg.WARMUP_SCHEDULE)],
+  ] as const) {
+    try {
+      parse();
+    } catch (e) {
+      problems.push(`${name}: ${(e as Error).message.replace(/^[A-Z_]+: /, '')}`);
+    }
   }
   if (cfg.SYSTEM_MAIL_FROM && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(cfg.SYSTEM_MAIL_FROM)) {
     problems.push('SYSTEM_MAIL_FROM: must be a plain email address');

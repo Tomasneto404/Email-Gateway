@@ -5,19 +5,25 @@ import { EventLogger } from '../common/event-logger';
 import { GatewayError, isGatewayError } from '../common/errors';
 import { ApiKey, DeliveryProvider, MessageSource, MessageStatus, Prisma } from '../generated/prisma/client';
 import { GatewayStateService } from '../gateway-state/gateway-state.service';
-import { validateDto } from '../keys/keys.service';
+import { keyWarmup, validateDto } from '../keys/keys.service';
 import { MessagesRepository } from '../messages/messages.repository';
+import { ClamavService } from '../policy/clamav.service';
+import { enforceContent } from '../policy/content-guard';
 import { DedupService } from '../policy/dedup.service';
 import { IdempotencyService } from '../policy/idempotency.service';
 import {
   NormalizedMessage,
+  allRecipients,
   computeBodyHash,
   computeDedupHash,
   computeMessageSize,
   enforcePolicy,
 } from '../policy/policy-engine';
 import { QuotaService, QuotaTicket } from '../policy/quota.service';
+import { parseWarmupSchedule } from '../policy/sending-limits';
 import { QueueService } from '../queue/queue.service';
+import { renderTemplate } from '../templates/template-engine';
+import { TemplatesService } from '../templates/templates.service';
 import { SendDto } from './send.dto';
 
 export interface SendContext {
@@ -42,6 +48,8 @@ const FROM_FIELDS = ['from', 'fromAddress', 'fromName', 'sender'];
  */
 @Injectable()
 export class SendService {
+  private readonly warmupSchedule: number[];
+
   constructor(
     @Inject(APP_CONFIG) private readonly cfg: AppConfig,
     private readonly gateway: GatewayStateService,
@@ -51,7 +59,11 @@ export class SendService {
     private readonly repo: MessagesRepository,
     private readonly queues: QueueService,
     private readonly events: EventLogger,
-  ) {}
+    private readonly templates: TemplatesService,
+    private readonly clamav: ClamavService,
+  ) {
+    this.warmupSchedule = parseWarmupSchedule(cfg.WARMUP_SCHEDULE);
+  }
 
   async submit(ctx: SendContext, raw: unknown): Promise<SendResult> {
     const key = ctx.apiKey;
@@ -96,6 +108,20 @@ export class SendService {
       }
 
       const dto = await validateDto(SendDto, raw);
+      let templateName: string | null = null;
+      if (dto.template) {
+        if (dto.subject !== undefined || dto.text !== undefined || dto.html !== undefined) {
+          throw new GatewayError('VALIDATION_FAILED', 'With "template", do not send "subject", "text" or "html": they come from the template. Pass values in "variables".');
+        }
+        const t = await this.templates.forSend(key, dto.template);
+        Object.assign(dto, renderTemplate(t, dto.variables));
+        templateName = t.name;
+      } else {
+        if (key.templatesOnly) {
+          throw new GatewayError('TEMPLATE_REQUIRED', `Key "${key.name}" may only send server-side templates. Send {"template": "<name>", "variables": {...}}; call GET /v1/templates to list them.`);
+        }
+        if (dto.variables) throw new GatewayError('VALIDATION_FAILED', '"variables" only applies together with "template".');
+      }
       if (!dto.text && !dto.html) {
         throw new GatewayError('VALIDATION_FAILED', 'Provide a body: at least one of "text" or "html" is required.');
       }
@@ -104,17 +130,23 @@ export class SendService {
       }
       const msg = normalize(dto);
       enforcePolicy(key, msg);
+      enforceContent(key, msg);
+      if (key.scanAttachments) await this.clamav.assertClean(key.name, msg.attachments);
       const provider = this.resolveProvider(key);
 
       dedupHash = computeDedupHash(key.id, msg);
       await this.dedup.claim(dedupHash, key.name);
 
+      const warmup = keyWarmup(key, this.warmupSchedule);
       ticket = await this.quota.consume({
         keyId: key.id,
         keyName: key.name,
         quotaPerHour: key.quotaPerHour,
-        quotaPerDay: key.quotaPerDay,
+        quotaPerDay: warmup ? Math.min(key.quotaPerDay, warmup.dailyCap) : key.quotaPerDay,
+        warmup: warmup && warmup.dailyCap < key.quotaPerDay ? warmup : null,
       });
+      // Shared per-domain caps protect the reputation where mail really leaves (not sandbox).
+      if (key.mode !== 'sandbox') await this.quota.consumeDomains(ticket, allRecipients(msg));
 
       const status: MessageStatus = key.mode === 'approval' ? 'pending_approval' : 'queued';
       const saved = await this.repo.create({
@@ -132,6 +164,7 @@ export class SendService {
         subject: msg.subject,
         textBody: msg.text ?? null,
         htmlBody: msg.html ?? null,
+        templateName,
         bodyHash: computeBodyHash(msg),
         dedupHash,
         idempotencyKey: idem ?? null,
@@ -216,6 +249,7 @@ export class SendService {
         subject: d.subject,
         textBody: d.text,
         htmlBody: d.html,
+        templateName: d.template,
         bodyHash: computeBodyHash({ text: d.text ?? undefined, html: d.html ?? undefined }),
         sourceIp: ctx.sourceIp ?? null,
       });
@@ -274,5 +308,6 @@ function draftFromRaw(raw: unknown) {
     subject: str(r.subject, 998) ?? '',
     text: str(r.text, 5 * 1024 * 1024),
     html: str(r.html, 5 * 1024 * 1024),
+    template: str(r.template, 64),
   };
 }

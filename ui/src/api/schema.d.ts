@@ -4,6 +4,124 @@
  */
 
 export interface paths {
+    "/admin/account/passkeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["accountPasskeys"];
+        put?: never;
+        /** Register the passkey created by the browser. It then works as a second factor. */
+        post: operations["accountAddPasskey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/account/passkeys/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WebAuthn creation options for navigator.credentials.create(). */
+        post: operations["accountPasskeyOptions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/account/passkeys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["accountRemovePasskey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/account/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change your password (local accounts). Your other sessions are signed out. */
+        post: operations["accountChangePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/account/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your active sessions */
+        get: operations["accountSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/account/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out everywhere except here */
+        post: operations["accountRevokeOtherSessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/account/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Sign out one of your sessions */
+        delete: operations["accountRevokeSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/account/totp/confirm": {
         parameters: {
             query?: never;
@@ -55,6 +173,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/alerts/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["adminListAlertChannels"];
+        put?: never;
+        /** Webhook (HMAC-signed), Slack incoming webhook or email. A webhook signing secret is returned ONCE. */
+        post: operations["adminCreateAlertChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/alerts/channels/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["adminDeleteAlertChannel"];
+        options?: never;
+        head?: never;
+        patch: operations["adminUpdateAlertChannel"];
+        trace?: never;
+    };
+    "/admin/alerts/channels/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a test alert to this channel only (delivered by the worker). */
+        post: operations["adminTestAlertChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/alerts/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Alert history, newest first */
+        get: operations["adminListAlertEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/alerts/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Alert types a channel can subscribe to */
+        get: operations["adminAlertTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/audit": {
         parameters: {
             query?: never;
@@ -81,6 +283,23 @@ export interface paths {
         };
         /** Export the activity log as CSV (same filters as the list: general, actorId, keyId, …). */
         get: operations["adminExportAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/audit/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Integrity check of the activity log hash chain. Record headSeq/headHash elsewhere to also detect removal of the newest rows. */
+        get: operations["adminVerifyAudit"];
         put?: never;
         post?: never;
         delete?: never;
@@ -182,6 +401,40 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["authLogout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/auth/passkey/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Step 2 with a passkey: WebAuthn request options for navigator.credentials.get(). */
+        post: operations["authPasskeyOptions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/auth/passkey/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Step 2 with a passkey: verify the assertion. Issues the full session cookie. */
+        post: operations["authPasskeyVerify"];
         delete?: never;
         options?: never;
         head?: never;
@@ -341,6 +594,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/keys/{id}/domain-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SPF / DMARC / DKIM of the key sender domain (SENDER_DOMAIN_CHECKS; cached 1 h, ?fresh=1 to recheck). */
+        get: operations["adminKeyDomainCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/keys/{id}/enable": {
         parameters: {
             query?: never;
@@ -366,7 +636,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rotate the secret. The old secret stops working immediately; the new one is returned ONCE. */
+        /** Rotate the secret; the new one is returned ONCE. The old secret stops immediately, or after graceMinutes. */
         post: operations["adminRotateKey"];
         delete?: never;
         options?: never;
@@ -626,6 +896,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["adminListTemplates"];
+        put?: never;
+        /** Create a template. Variables are written {{name}}. */
+        post: operations["adminCreateTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["adminGetTemplate"];
+        put?: never;
+        post?: never;
+        /** Delete a template no key allows any more. */
+        delete: operations["adminDeleteTemplate"];
+        options?: never;
+        head?: never;
+        patch: operations["adminUpdateTemplate"];
+        trace?: never;
+    };
+    "/admin/templates/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render with sample variables (nothing is sent). */
+        post: operations["adminPreviewTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users": {
         parameters: {
             query?: never;
@@ -754,10 +1075,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Templates your key may send
+         * @description Server-side templates available to the calling key. Send one with {"to": ..., "template": "<name>", "variables": {...}}: every listed variable is required. Keys with templatesOnly=true can only send templates.
+         */
+        get: operations["listMyTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccountSessionDto: {
+            createdAt: string;
+            current: boolean;
+            expiresAt: string;
+            /** @description Opaque session id (hash of the cookie) */
+            id: string;
+            ip: string | null;
+            lastSeenAt: string;
+            userAgent: string | null;
+        };
+        AlertChannelCreatedDto: {
+            channel: components["schemas"]["AlertChannelDto"];
+            /** @description Webhook signing secret, shown ONCE. Verify X-Mail-Gateway-Signature = sha256=HMAC(secret, "<timestamp>.<body>"). */
+            signingSecret?: string;
+        };
+        AlertChannelDto: {
+            createdAt: string;
+            enabled: boolean;
+            events: string[];
+            id: string;
+            lastDeliveredAt: string | null;
+            lastError: string | null;
+            name: string;
+            signed: boolean;
+            /** @description Target with the secret parts hidden (URL host only, email addresses as is) */
+            targetPreview: string;
+            /** @enum {string} */
+            type: "webhook" | "slack" | "email";
+        };
+        AlertChannelListDto: {
+            items: components["schemas"]["AlertChannelDto"][];
+        };
+        AlertEventDto: {
+            at: string;
+            deliveredTo: string[];
+            detail: {
+                [key: string]: unknown;
+            } | null;
+            failedTo: string[];
+            id: string;
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            title: string;
+            type: string;
+        };
+        AlertEventListDto: {
+            items: components["schemas"]["AlertEventDto"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        AlertRulesDto: {
+            approvalWaitMinutes: number;
+            cooldownMinutes: number;
+            failureSpike: number;
+            keyExpiryDays: number;
+            quotaPercent: number;
+            rejectionSpike: number;
+            spikeWindowMinutes: number;
+        };
+        AlertTestDto: {
+            eventId: string;
+        };
+        AlertTypeDto: {
+            label: string;
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            type: string;
+        };
         AttachmentDto: {
             /** @description File content, base64-encoded. Decoded size counts toward maxAttachmentBytes and maxMessageBytes. */
             content: string;
@@ -788,10 +1198,13 @@ export interface components {
             details: {
                 [key: string]: unknown;
             } | null;
+            hash: string | null;
             id: string;
             ip: string | null;
             /** @enum {string} */
             outcome: "success" | "failure";
+            /** @description Position in the tamper-evident chain */
+            seq: string;
             targetId: string | null;
             targetType: string | null;
         };
@@ -802,6 +1215,15 @@ export interface components {
             page: number;
             pageSize: number;
             total: number;
+        };
+        AuditVerifyDto: {
+            anchorSeq: string | null;
+            brokenAtSeq: string | null;
+            checked: number;
+            headHash: string | null;
+            headSeq: string | null;
+            ok: boolean;
+            reason: string | null;
         };
         AuthConfigDto: {
             authentik: boolean;
@@ -836,6 +1258,11 @@ export interface components {
         BulkResultDto: {
             results: components["schemas"]["BulkItemDto"][];
         };
+        ChangePasswordBody: {
+            currentPassword: string;
+            /** @description At least 12 characters */
+            newPassword: string;
+        };
         CheckDto: {
             error?: string;
             latencyMs?: number;
@@ -846,14 +1273,36 @@ export interface components {
             /** @description 6-digit code from the authenticator app */
             code: string;
         };
+        CreateAlertChannelDto: {
+            enabled?: boolean;
+            /** @description Alert types delivered to this channel; ["*"] = all. */
+            events?: string[];
+            name?: string;
+            /** @description webhook / slack: the URL (https recommended). email: comma-separated addresses. */
+            target?: string;
+            /** @enum {string} */
+            type: "webhook" | "slack" | "email";
+        };
         CreateKeyDto: {
             allowReplyTo?: boolean;
+            /** @description MIME types allowed as attachments ("application/pdf", "image/*"). Empty = any. Executables are always refused. */
+            allowedAttachmentTypes?: string[];
+            /** @description Source IPs or CIDR ranges allowed to use the key ("10.0.0.0/24", "2001:db8::/32"). Empty = any. */
+            allowedIps?: string[];
+            /** @description Domains links in the body may point to (subdomains included). Empty = any. */
+            allowedLinkDomains?: string[];
             /** @description Exact addresses ("ops@example.com") and/or domains ("@example.com"). Empty = reject everything. */
             allowedRecipients?: string[];
+            /** @description Template names the key may use. Empty = any template. */
+            allowedTemplates?: string[];
             attachmentsAllowed?: boolean;
+            /** @description Refuse bodies containing credentials, private keys, card or bank numbers (default true). */
+            blockSecrets?: boolean;
             /** @description Free text description of what this key is for. */
             description?: string;
             enabled?: boolean;
+            /** @description ISO date-time after which the key stops working. null = never. */
+            expiresAt?: string | null;
             /** @description Fixed sender address (required on create). Clients cannot override it. */
             fromAddress?: string;
             fromName?: string | null;
@@ -863,6 +1312,8 @@ export interface components {
              */
             liveProvider?: "smtp" | "resend" | null;
             maxAttachmentBytes?: number;
+            /** @description Maximum distinct links per message. null = unlimited. */
+            maxLinks?: number | null;
             maxMessageBytes?: number;
             maxRecipientsPerMessage?: number;
             /**
@@ -874,6 +1325,12 @@ export interface components {
             name: string;
             quotaPerDay?: number;
             quotaPerHour?: number;
+            /** @description Virus-scan attachments with ClamAV (needs CLAMAV_HOST on the gateway). */
+            scanAttachments?: boolean;
+            /** @description Only server-side templates may be sent; free-form subject/text/html are refused. */
+            templatesOnly?: boolean;
+            /** @description Ramp up the daily volume over the first days after the key leaves sandbox (WARMUP_SCHEDULE). */
+            warmup?: boolean;
         };
         CreateRoleDto: {
             description?: string;
@@ -881,6 +1338,54 @@ export interface components {
             /** @description Permission ids, "<area>:*" or "*" */
             permissions: string[];
             ssoGroups?: string[];
+        };
+        CreateTemplateDto: {
+            /** @description What the template is for (shown to API clients in GET /v1/templates). */
+            description?: string;
+            /** @description HTML body with {{variables}} (values are HTML-escaped). */
+            html?: string | null;
+            /** @description Unique name used by API clients ("template": "<name>"). Letters, digits, ".", "_", "-". */
+            name: string;
+            /** @description Subject with {{variables}}. No line breaks. */
+            subject?: string;
+            /** @description Plain-text body with {{variables}}. */
+            text?: string | null;
+        };
+        DkimCheckDto: {
+            note: string;
+            record: string | null;
+            selector: string | null;
+            /** @enum {string} */
+            status: "pass" | "warn" | "fail";
+        };
+        DmarcCheckDto: {
+            note: string;
+            policy: string | null;
+            record: string | null;
+            /** @enum {string} */
+            status: "pass" | "warn" | "fail";
+        };
+        DomainCheckDto: {
+            checkedAt: string;
+            dkim: components["schemas"]["DkimCheckDto"];
+            dmarc: components["schemas"]["DmarcCheckDto"];
+            domain: string;
+            /** @enum {string} */
+            mode: "off" | "warn" | "enforce";
+            /** @description SPF and DMARC do not fail */
+            ok: boolean;
+            spf: components["schemas"]["DomainCheckItemDto"];
+        };
+        DomainCheckItemDto: {
+            note: string;
+            record: string | null;
+            /** @enum {string} */
+            status: "pass" | "warn" | "fail";
+        };
+        DomainLimitDto: {
+            /** @description "*" = every other domain */
+            domain: string;
+            perHour: number;
         };
         ErrorBodyDto: {
             /** @description Stable machine-readable code, e.g. RECIPIENT_NOT_ALLOWED, QUOTA_EXCEEDED, DUPLICATE_MESSAGE, KEY_DISABLED, GATEWAY_PAUSED. */
@@ -932,11 +1437,18 @@ export interface components {
         };
         KeyDto: {
             allowReplyTo: boolean;
+            allowedAttachmentTypes: string[];
+            /** @description Source IPs/CIDRs allowed; empty = any */
+            allowedIps: string[];
+            allowedLinkDomains: string[];
             allowedRecipients: string[];
+            allowedTemplates: string[];
             attachmentsAllowed: boolean;
+            blockSecrets: boolean;
             createdAt: string;
             description: string;
             enabled: boolean;
+            expiresAt: string | null;
             fromAddress: string;
             fromName: string | null;
             id: string;
@@ -944,17 +1456,26 @@ export interface components {
             lastUsedAt: string | null;
             /** @enum {string|null} */
             liveProvider: "smtp" | "resend" | null;
+            /** @description First time the key left sandbox */
+            liveSince: string | null;
             maxAttachmentBytes: number;
+            maxLinks: number | null;
             maxMessageBytes: number;
             maxRecipientsPerMessage: number;
             /** @enum {string} */
             mode: "sandbox" | "live" | "approval";
             name: string;
             prefixStale: boolean;
+            /** @description Rotation grace: the previous secret works until then */
+            previousSecretValidUntil: string | null;
             quotaPerDay: number;
             quotaPerHour: number;
             rotatedAt: string | null;
+            scanAttachments: boolean;
+            templatesOnly: boolean;
             updatedAt: string;
+            warmup: boolean;
+            warmupState: components["schemas"]["WarmupStateDto"] | null;
         };
         KeyListDto: {
             items: components["schemas"]["KeyWithUsageDto"][];
@@ -972,11 +1493,18 @@ export interface components {
         };
         KeyWithUsageDto: {
             allowReplyTo: boolean;
+            allowedAttachmentTypes: string[];
+            /** @description Source IPs/CIDRs allowed; empty = any */
+            allowedIps: string[];
+            allowedLinkDomains: string[];
             allowedRecipients: string[];
+            allowedTemplates: string[];
             attachmentsAllowed: boolean;
+            blockSecrets: boolean;
             createdAt: string;
             description: string;
             enabled: boolean;
+            expiresAt: string | null;
             fromAddress: string;
             fromName: string | null;
             id: string;
@@ -984,18 +1512,27 @@ export interface components {
             lastUsedAt: string | null;
             /** @enum {string|null} */
             liveProvider: "smtp" | "resend" | null;
+            /** @description First time the key left sandbox */
+            liveSince: string | null;
             maxAttachmentBytes: number;
+            maxLinks: number | null;
             maxMessageBytes: number;
             maxRecipientsPerMessage: number;
             /** @enum {string} */
             mode: "sandbox" | "live" | "approval";
             name: string;
             prefixStale: boolean;
+            /** @description Rotation grace: the previous secret works until then */
+            previousSecretValidUntil: string | null;
             quotaPerDay: number;
             quotaPerHour: number;
             rotatedAt: string | null;
+            scanAttachments: boolean;
+            templatesOnly: boolean;
             updatedAt: string;
             usage: components["schemas"]["KeyUsageDto"];
+            warmup: boolean;
+            warmupState: components["schemas"]["WarmupStateDto"] | null;
         };
         LoginBody: {
             email: string;
@@ -1004,11 +1541,13 @@ export interface components {
         LoginResultDto: {
             /** @description Present when next=done */
             csrfToken?: string;
+            /** @description Second-factor methods available (when next is not done) */
+            methods?: ("passkey" | "totp")[];
             /**
-             * @description done: signed in (no 2FA for this user). totp_verify: enter the TOTP code. totp_enroll: 2FA is mandatory and must be set up now.
+             * @description done: signed in (no 2FA for this user). totp_verify: enter the TOTP code. totp_enroll: 2FA is mandatory and must be set up now. second_factor: the user has a passkey; use one of `methods` (passkey via /admin/auth/passkey/*, totp via /admin/auth/totp/verify).
              * @enum {string}
              */
-            next: "done" | "totp_enroll" | "totp_verify";
+            next: "done" | "totp_enroll" | "totp_verify" | "second_factor";
             /** @description Present when next=done */
             user?: components["schemas"]["UserDto"];
         };
@@ -1019,12 +1558,22 @@ export interface components {
         MeResponseDto: {
             /** @description Whether replyTo may be set. */
             allowReplyTo: boolean;
+            /** @description Allowed attachment MIME types ("image/*" wildcards). Empty = any. Executables are always refused. */
+            allowedAttachmentTypes: string[];
+            /** @description Domains links in the body may point to (subdomains included). Empty = any. */
+            allowedLinkDomains: string[];
             /** @description Allowed recipients: exact addresses and "@domain" entries. Every to/cc/bcc must match one. */
             allowedRecipients: string[];
+            /** @description Templates the key may use. Empty = any. */
+            allowedTemplates: string[];
             attachmentsAllowed: boolean;
+            /** @description Bodies with credentials, private keys, card or bank numbers are refused (CONTENT_BLOCKED). */
+            blockSecrets: boolean;
             description: string;
             /** @description false = key disabled; every send is rejected with KEY_DISABLED. */
             enabled: boolean;
+            /** @description The key stops working at this time (ISO). null = never. */
+            expiresAt?: string | null;
             /** @description Fixed sender address used for every message. */
             fromAddress: string;
             fromName?: string | null;
@@ -1033,6 +1582,8 @@ export interface components {
             /** @enum {string|null} */
             liveProvider?: "smtp" | "resend" | null;
             maxAttachmentBytes: number;
+            /** @description Max distinct links per message. null = unlimited. */
+            maxLinks?: number | null;
             /** @description Max subject+text+html+attachments bytes. */
             maxMessageBytes: number;
             /** @description Max to+cc+bcc per message. */
@@ -1043,9 +1594,21 @@ export interface components {
              */
             mode: "sandbox" | "live" | "approval";
             name: string;
+            /** @description After a rotation, the previous secret keeps working until then. Switch to the new one before. */
+            previousSecretValidUntil?: string | null;
             quotaPerDay: number;
             quotaPerHour: number;
+            /** @description Attachments are virus-scanned. */
+            scanAttachments: boolean;
+            /** @description Only server-side templates may be sent (see GET /v1/templates). */
+            templatesOnly: boolean;
             usage: components["schemas"]["UsageDto"];
+            /** @description While warming up after going live: today's daily cap ({day, days, dailyCap}). usage.day.limit already includes it. */
+            warmupState?: {
+                dailyCap?: number;
+                day?: number;
+                days?: number;
+            } | null;
         };
         MessageActionDto: {
             id: string;
@@ -1171,9 +1734,19 @@ export interface components {
             /** @enum {string} */
             outcome: "delivered" | "delayed" | "bounced" | "complained";
         };
+        PasskeyDto: {
+            createdAt: string;
+            id: string;
+            lastUsedAt: string | null;
+            name: string;
+        };
         PasswordBody: {
             /** @description At least 12 characters */
             password: string;
+        };
+        PasswordChangedDto: {
+            /** @description Other sessions that were signed out */
+            otherSessionsRevoked: number;
         };
         PauseBody: {
             /** @description Why the gateway is paused (shown in the UI and audit log). */
@@ -1183,6 +1756,13 @@ export interface components {
             area: string;
             id: string;
             label: string;
+        };
+        PublicTemplateDto: {
+            description: string;
+            name: string;
+            /** @description The subject pattern, with {{variables}} */
+            subject: string;
+            variables: string[];
         };
         QueueDepthDto: {
             active: number;
@@ -1203,6 +1783,9 @@ export interface components {
         ResendSettingsDto: {
             enabled: boolean;
             webhookConfigured: boolean;
+        };
+        RevokedDto: {
+            revoked: number;
         };
         RoleDto: {
             builtin: boolean;
@@ -1225,6 +1808,10 @@ export interface components {
         RoleRefDto: {
             id: string;
             name: string;
+        };
+        RotateKeyDto: {
+            /** @description Minutes the previous secret keeps working (0-10080). 0 = it stops immediately. */
+            graceMinutes?: number;
         };
         SendAcceptedDto: {
             /** @description Message id. Use GET /v1/messages/{id} to follow delivery. */
@@ -1251,10 +1838,15 @@ export interface components {
             /** @description Reply-To address. Only accepted if your key policy has allowReplyTo=true. */
             replyTo?: string;
             /**
-             * @description Subject line. Required, 1-998 characters, no line breaks.
+             * @description Subject line, 1-998 characters, no line breaks. Required unless "template" is used.
              * @example Nightly report
              */
-            subject: string;
+            subject?: string;
+            /**
+             * @description Name of a server-side template (GET /v1/templates). Renders subject/text/html from "variables"; do not send subject, text or html with it. Keys with templatesOnly=true must use a template.
+             * @example password-reset
+             */
+            template?: string;
             /** @description Plain-text body. At least one of "text" or "html" is required. */
             text?: string;
             /**
@@ -1264,6 +1856,10 @@ export interface components {
              *     ]
              */
             to: string | string[];
+            /** @description Values for the template variables (strings, numbers or booleans). Every variable of the template is required. */
+            variables?: {
+                [key: string]: unknown;
+            };
         };
         SeriesPointDto: {
             accepted: number;
@@ -1281,11 +1877,15 @@ export interface components {
         };
         SettingsDto: {
             adminTokenEnabled: boolean;
+            alertRules: components["schemas"]["AlertRulesDto"];
+            auditChainKeyed: boolean;
             authentik: components["schemas"]["AuthentikSettingsDto"];
+            bodiesEncrypted: boolean;
             bodyRetentionDays: number;
             breakerConsecutiveFailures: number;
             breakerFailureRate: number;
             breakerWindowSeconds: number;
+            clamav: string | null;
             dedupWindowSeconds: number;
             deliveryMaxAttempts: number;
             globalAcceptPerHour: number;
@@ -1298,15 +1898,20 @@ export interface components {
             mailpitSmtp: string;
             mailpitUiUrl: string | null;
             maxRequestBytes: number;
+            recipientDomainLimits: components["schemas"]["DomainLimitDto"][];
             recordRetentionDays: number;
             resend: components["schemas"]["ResendSettingsDto"];
             retentionCron: string;
+            /** @enum {string} */
+            senderDomainChecks: "off" | "warn" | "enforce";
             sessionIdleMinutes: number;
             sessionTtlHours: number;
             smtp: components["schemas"]["SmtpSettingsDto"];
             systemMail: components["schemas"]["SystemMailSettingsDto"];
             totpRequired: boolean;
             trustProxy: string;
+            /** @description Daily caps for day 1, 2, … after a key leaves sandbox */
+            warmupSchedule: number[];
         };
         SmtpSettingsDto: {
             authConfigured: boolean;
@@ -1322,6 +1927,8 @@ export interface components {
             bucket: "hour" | "day";
             from: string;
             outcomes: components["schemas"]["OutcomeCountDto"][];
+            /** @description Same totals for the period of equal length just before "from" */
+            previousTotals: components["schemas"]["TotalsDto"];
             rejectionsByReason: components["schemas"]["ReasonCountDto"][];
             series: components["schemas"]["SeriesPointDto"][];
             to: string;
@@ -1340,6 +1947,35 @@ export interface components {
             pendingApprovals: number;
             queue: components["schemas"]["QueueDepthDto"];
             smtpHealth: components["schemas"]["CheckDto"];
+        };
+        TemplateDto: {
+            createdAt: string;
+            description: string;
+            html: string | null;
+            id: string;
+            name: string;
+            subject: string;
+            text: string | null;
+            updatedAt: string;
+            /** @description Keys that explicitly allow this template */
+            usedBy: string[];
+            /** @description Variables found in subject/text/html */
+            variables: string[];
+        };
+        TemplateListDto: {
+            items: components["schemas"]["TemplateDto"][];
+            total: number;
+        };
+        TemplatePreviewBody: {
+            /** @description Variable values */
+            variables?: {
+                [key: string]: unknown;
+            };
+        };
+        TemplateRenderDto: {
+            html?: string;
+            subject: string;
+            text?: string;
         };
         TestSendDto: {
             subject?: string;
@@ -1365,14 +2001,34 @@ export interface components {
             qrDataUrl: string;
             secret: string;
         };
+        UpdateAlertChannelDto: {
+            enabled?: boolean;
+            /** @description Alert types delivered to this channel; ["*"] = all. */
+            events?: string[];
+            name?: string;
+            /** @description webhook / slack: the URL (https recommended). email: comma-separated addresses. */
+            target?: string;
+        };
         UpdateKeyDto: {
             allowReplyTo?: boolean;
+            /** @description MIME types allowed as attachments ("application/pdf", "image/*"). Empty = any. Executables are always refused. */
+            allowedAttachmentTypes?: string[];
+            /** @description Source IPs or CIDR ranges allowed to use the key ("10.0.0.0/24", "2001:db8::/32"). Empty = any. */
+            allowedIps?: string[];
+            /** @description Domains links in the body may point to (subdomains included). Empty = any. */
+            allowedLinkDomains?: string[];
             /** @description Exact addresses ("ops@example.com") and/or domains ("@example.com"). Empty = reject everything. */
             allowedRecipients?: string[];
+            /** @description Template names the key may use. Empty = any template. */
+            allowedTemplates?: string[];
             attachmentsAllowed?: boolean;
+            /** @description Refuse bodies containing credentials, private keys, card or bank numbers (default true). */
+            blockSecrets?: boolean;
             /** @description Free text description of what this key is for. */
             description?: string;
             enabled?: boolean;
+            /** @description ISO date-time after which the key stops working. null = never. */
+            expiresAt?: string | null;
             /** @description Fixed sender address (required on create). Clients cannot override it. */
             fromAddress?: string;
             fromName?: string | null;
@@ -1382,6 +2038,8 @@ export interface components {
              */
             liveProvider?: "smtp" | "resend" | null;
             maxAttachmentBytes?: number;
+            /** @description Maximum distinct links per message. null = unlimited. */
+            maxLinks?: number | null;
             maxMessageBytes?: number;
             maxRecipientsPerMessage?: number;
             /**
@@ -1391,12 +2049,30 @@ export interface components {
             mode?: "sandbox" | "live" | "approval";
             quotaPerDay?: number;
             quotaPerHour?: number;
+            /** @description Virus-scan attachments with ClamAV (needs CLAMAV_HOST on the gateway). */
+            scanAttachments?: boolean;
+            /** @description Only server-side templates may be sent; free-form subject/text/html are refused. */
+            templatesOnly?: boolean;
+            /** @description Ramp up the daily volume over the first days after the key leaves sandbox (WARMUP_SCHEDULE). */
+            warmup?: boolean;
         };
         UpdateRoleDto: {
             description?: string;
             name?: string;
             permissions?: string[];
             ssoGroups?: string[];
+        };
+        UpdateTemplateDto: {
+            /** @description What the template is for (shown to API clients in GET /v1/templates). */
+            description?: string;
+            /** @description HTML body with {{variables}} (values are HTML-escaped). */
+            html?: string | null;
+            /** @description Renaming also updates the keys that allow this template. */
+            name?: string;
+            /** @description Subject with {{variables}}. No line breaks. */
+            subject?: string;
+            /** @description Plain-text body with {{variables}}. */
+            text?: string | null;
         };
         UpdateUserDto: {
             disabled?: boolean;
@@ -1435,6 +2111,13 @@ export interface components {
             items: components["schemas"]["UserDto"][];
             total: number;
         };
+        WarmupStateDto: {
+            /** @description Daily cap that applies today */
+            dailyCap: number;
+            /** @description Day of the warm-up (1-based) */
+            day: number;
+            days: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -1444,6 +2127,173 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    accountPasskeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyDto"][];
+                };
+            };
+        };
+    };
+    accountAddPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    response: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyDto"];
+                };
+            };
+        };
+    };
+    accountPasskeyOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    accountRemovePasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    accountChangePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordChangedDto"];
+                };
+            };
+        };
+    };
+    accountSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountSessionDto"][];
+                };
+            };
+        };
+    };
+    accountRevokeOtherSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokedDto"];
+                };
+            };
+        };
+    };
+    accountRevokeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     accountTotpConfirm: {
         parameters: {
             query?: never;
@@ -1509,6 +2359,154 @@ export interface operations {
             };
         };
     };
+    adminListAlertChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannelListDto"];
+                };
+            };
+        };
+    };
+    adminCreateAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAlertChannelDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannelCreatedDto"];
+                };
+            };
+        };
+    };
+    adminDeleteAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminUpdateAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAlertChannelDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannelDto"];
+                };
+            };
+        };
+    };
+    adminTestAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertTestDto"];
+                };
+            };
+        };
+    };
+    adminListAlertEvents: {
+        parameters: {
+            query?: {
+                pageSize?: number;
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertEventListDto"];
+                };
+            };
+        };
+    };
+    adminAlertTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertTypeDto"][];
+                };
+            };
+        };
+    };
     adminListAudit: {
         parameters: {
             query?: {
@@ -1566,6 +2564,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    adminVerifyAudit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditVerifyDto"];
+                };
             };
         };
     };
@@ -1706,6 +2723,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogoutDto"];
+                };
+            };
+        };
+    };
+    authPasskeyOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    authPasskeyVerify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    response: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDto"];
                 };
             };
         };
@@ -1968,6 +3033,29 @@ export interface operations {
             };
         };
     };
+    adminKeyDomainCheck: {
+        parameters: {
+            query?: {
+                fresh?: "0" | "1";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainCheckDto"];
+                };
+            };
+        };
+    };
     adminEnableKey: {
         parameters: {
             query?: never;
@@ -1998,7 +3086,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RotateKeyDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -2395,6 +3487,138 @@ export interface operations {
             };
         };
     };
+    adminListTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateListDto"];
+                };
+            };
+        };
+    };
+    adminCreateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDto"];
+                };
+            };
+        };
+    };
+    adminGetTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDto"];
+                };
+            };
+        };
+    };
+    adminDeleteTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminUpdateTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateDto"];
+                };
+            };
+        };
+    };
+    adminPreviewTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplatePreviewBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateRenderDto"];
+                };
+            };
+        };
+    };
     adminListUsers: {
         parameters: {
             query?: never;
@@ -2597,7 +3821,7 @@ export interface operations {
                     "application/json": components["schemas"]["SendAcceptedDto"];
                 };
             };
-            /** @description VALIDATION_FAILED, FROM_NOT_ALLOWED, TOO_MANY_RECIPIENTS, REPLY_TO_NOT_ALLOWED, ATTACHMENTS_NOT_ALLOWED */
+            /** @description VALIDATION_FAILED, FROM_NOT_ALLOWED, TOO_MANY_RECIPIENTS, TOO_MANY_LINKS, REPLY_TO_NOT_ALLOWED, ATTACHMENTS_NOT_ALLOWED */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2606,7 +3830,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDto"];
                 };
             };
-            /** @description UNAUTHORIZED, INVALID_API_KEY */
+            /** @description UNAUTHORIZED, INVALID_API_KEY, KEY_EXPIRED */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -2615,8 +3839,17 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDto"];
                 };
             };
-            /** @description RECIPIENT_NOT_ALLOWED, KEY_DISABLED */
+            /** @description RECIPIENT_NOT_ALLOWED, LINK_NOT_ALLOWED, KEY_DISABLED, IP_NOT_ALLOWED, TEMPLATE_REQUIRED, TEMPLATE_NOT_ALLOWED */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDto"];
+                };
+            };
+            /** @description TEMPLATE_NOT_FOUND */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2642,7 +3875,25 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDto"];
                 };
             };
-            /** @description QUOTA_EXCEEDED, GLOBAL_RATE_LIMITED, AUTH_RATE_LIMITED (see Retry-After) */
+            /** @description ATTACHMENT_TYPE_NOT_ALLOWED */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDto"];
+                };
+            };
+            /** @description CONTENT_BLOCKED (credentials, keys, card/bank numbers in the body), ATTACHMENT_INFECTED */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponseDto"];
+                };
+            };
+            /** @description QUOTA_EXCEEDED (also during warm-up), DOMAIN_RATE_LIMITED, GLOBAL_RATE_LIMITED, AUTH_RATE_LIMITED (see Retry-After) */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2651,13 +3902,32 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponseDto"];
                 };
             };
-            /** @description GATEWAY_PAUSED, PROVIDER_UNAVAILABLE, QUEUE_UNAVAILABLE */
+            /** @description GATEWAY_PAUSED, PROVIDER_UNAVAILABLE, QUEUE_UNAVAILABLE, ATTACHMENT_SCAN_UNAVAILABLE */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponseDto"];
+                };
+            };
+        };
+    };
+    listMyTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicTemplateDto"][];
                 };
             };
         };

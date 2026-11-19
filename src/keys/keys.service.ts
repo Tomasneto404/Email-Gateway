@@ -1,5 +1,5 @@
 // Authored by Tomás Neto (TN 2026)
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { APP_CONFIG, AppConfig } from '../config/config';
@@ -7,7 +7,9 @@ import { GatewayError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { Actor, AdminAuditService } from '../admin/admin-audit.service';
 import { ApiKey, Prisma } from '../generated/prisma/client';
-import { CreateKeyDto, PolicyFieldsDto, UpdateKeyDto } from './keys.dto';
+import { WarmupState, parseWarmupSchedule, warmupState } from '../policy/sending-limits';
+import { DomainCheckService } from './domain-check.service';
+import { CreateKeyDto, PolicyFieldsDto, RotateKeyDto, UpdateKeyDto } from './keys.dto';
 import { displayPrefix, generateApiKey, hashApiKey, safeEqual } from './key-format';
 
 export interface PolicyView {
@@ -28,6 +30,21 @@ export interface PolicyView {
   attachmentsAllowed: boolean;
   maxAttachmentBytes: number;
   liveProvider: ApiKey['liveProvider'];
+  allowedIps: string[];
+  expiresAt: string | null;
+  /** the previous secret keeps working until then (rotation grace period) */
+  previousSecretValidUntil: string | null;
+  allowedLinkDomains: string[];
+  maxLinks: number | null;
+  blockSecrets: boolean;
+  allowedAttachmentTypes: string[];
+  scanAttachments: boolean;
+  templatesOnly: boolean;
+  allowedTemplates: string[];
+  warmup: boolean;
+  liveSince: string | null;
+  /** current warm-up step, null when not warming up */
+  warmupState: WarmupState | null;
   /** true when the key prefix (mk_sbx_/mk_live_) no longer matches the mode: rotate recommended. */
   prefixStale: boolean;
   lastUsedAt: string | null;
@@ -36,8 +53,15 @@ export interface PolicyView {
   updatedAt: string;
 }
 
-export function toPolicyView(k: ApiKey): PolicyView {
+/** Warm-up applies only to keys that send for real, with warm-up on. */
+export function keyWarmup(k: Pick<ApiKey, 'mode' | 'warmup' | 'liveSince'>, schedule: number[], now = new Date()): WarmupState | null {
+  if (k.mode === 'sandbox' || !k.warmup) return null;
+  return warmupState(k.liveSince, schedule, now);
+}
+
+export function toPolicyView(k: ApiKey, warmupSchedule: number[] = []): PolicyView {
   const issuedLive = k.keyPrefix.startsWith('mk_live_');
+  const graceOpen = k.prevKeyExpiresAt && k.prevKeyExpiresAt.getTime() > Date.now();
   return {
     id: k.id,
     name: k.name,
@@ -56,6 +80,19 @@ export function toPolicyView(k: ApiKey): PolicyView {
     attachmentsAllowed: k.attachmentsAllowed,
     maxAttachmentBytes: k.maxAttachmentBytes,
     liveProvider: k.liveProvider,
+    allowedIps: k.allowedIps,
+    expiresAt: k.expiresAt?.toISOString() ?? null,
+    previousSecretValidUntil: graceOpen ? k.prevKeyExpiresAt!.toISOString() : null,
+    allowedLinkDomains: k.allowedLinkDomains,
+    maxLinks: k.maxLinks,
+    blockSecrets: k.blockSecrets,
+    allowedAttachmentTypes: k.allowedAttachmentTypes,
+    scanAttachments: k.scanAttachments,
+    templatesOnly: k.templatesOnly,
+    allowedTemplates: k.allowedTemplates,
+    warmup: k.warmup,
+    liveSince: k.liveSince?.toISOString() ?? null,
+    warmupState: keyWarmup(k, warmupSchedule),
     prefixStale: issuedLive !== (k.mode !== 'sandbox'),
     lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
     rotatedAt: k.rotatedAt?.toISOString() ?? null,
@@ -91,24 +128,45 @@ export interface ListKeysQuery {
 
 @Injectable()
 export class KeysService {
+  readonly warmupSchedule: number[];
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AdminAuditService,
     @Inject(APP_CONFIG) private readonly cfg: AppConfig,
-  ) {}
+    @Optional() private readonly domains?: DomainCheckService,
+  ) {
+    this.warmupSchedule = parseWarmupSchedule(cfg.WARMUP_SCHEDULE);
+  }
 
-  /** Bearer secret → active (non-deleted) key, or null. */
-  async authenticate(secret: string): Promise<ApiKey | null> {
+  view(k: ApiKey): PolicyView {
+    return toPolicyView(k, this.warmupSchedule);
+  }
+
+  /**
+   * Bearer secret → active (non-deleted) key, or null. The previous secret of a rotated key is
+   * accepted until its grace period ends (`viaPrevious`).
+   */
+  async authenticate(secret: string): Promise<(ApiKey & { viaPrevious?: boolean }) | null> {
     if (!secret || secret.length > 200) return null;
     const hash = hashApiKey(secret);
-    const key = await this.prisma.apiKey.findUnique({ where: { keyHash: hash } });
+    let key: ApiKey | null = await this.prisma.apiKey.findUnique({ where: { keyHash: hash } });
+    let viaPrevious = false;
+    if (!key) {
+      const prev = await this.prisma.apiKey.findUnique({ where: { prevKeyHash: hash } });
+      if (prev?.prevKeyHash && prev.prevKeyExpiresAt && prev.prevKeyExpiresAt.getTime() > Date.now() && safeEqual(hash, prev.prevKeyHash)) {
+        key = prev;
+        viaPrevious = true;
+      }
+    } else if (!safeEqual(hash, key.keyHash)) {
+      return null;
+    }
     if (!key || key.deletedAt) return null;
-    if (!safeEqual(hash, key.keyHash)) return null;
     // Throttled last-used update (at most once per minute).
     if (!key.lastUsedAt || Date.now() - key.lastUsedAt.getTime() > 60_000) {
       void this.prisma.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined);
     }
-    return key;
+    return viaPrevious ? { ...key, viaPrevious } : key;
   }
 
   async create(body: unknown, actor: Actor): Promise<{ key: PolicyView; secret: string }> {
@@ -117,6 +175,7 @@ export class KeysService {
     const exists = await this.prisma.apiKey.findUnique({ where: { name: dto.name } });
     if (exists) throw new GatewayError('CONFLICT', `A key named "${dto.name}" already exists.`);
     const mode = dto.mode ?? 'sandbox';
+    if (mode !== 'sandbox') await this.domains?.assertReadyForLive(dto.fromAddress);
     const secret = generateApiKey(mode);
     const key = await this.prisma.apiKey.create({
       data: {
@@ -137,6 +196,17 @@ export class KeysService {
         attachmentsAllowed: dto.attachmentsAllowed ?? false,
         maxAttachmentBytes: dto.maxAttachmentBytes ?? this.cfg.DEFAULT_MAX_ATTACHMENT_BYTES,
         liveProvider: dto.liveProvider ?? null,
+        allowedIps: dedupeKeepCase(dto.allowedIps ?? []),
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+        allowedLinkDomains: dedupe(dto.allowedLinkDomains ?? []),
+        maxLinks: dto.maxLinks ?? null,
+        blockSecrets: dto.blockSecrets ?? true,
+        allowedAttachmentTypes: dedupe(dto.allowedAttachmentTypes ?? []),
+        scanAttachments: dto.scanAttachments ?? false,
+        templatesOnly: dto.templatesOnly ?? false,
+        allowedTemplates: dedupeKeepCase(dto.allowedTemplates ?? []),
+        warmup: dto.warmup ?? true,
+        liveSince: mode !== 'sandbox' ? new Date() : null,
       },
     });
     await this.audit.record(actor, {
@@ -145,7 +215,7 @@ export class KeysService {
       targetId: key.id,
       details: { name: key.name, mode: key.mode },
     });
-    return { key: toPolicyView(key), secret };
+    return { key: this.view(key), secret };
   }
 
   async update(id: string, body: unknown, actor: Actor): Promise<PolicyView> {
@@ -156,13 +226,22 @@ export class KeysService {
     for (const field of Object.keys(dto) as Array<keyof PolicyFieldsDto>) {
       const v = dto[field];
       if (v === undefined) continue;
-      const next = field === 'allowedRecipients' ? dedupe(v as string[]) : v;
+      let next: unknown = v;
+      if (field === 'allowedRecipients' || field === 'allowedLinkDomains' || field === 'allowedAttachmentTypes') next = dedupe(v as string[]);
+      else if (field === 'allowedIps' || field === 'allowedTemplates') next = dedupeKeepCase(v as string[]);
+      else if (field === 'expiresAt') next = v === null ? null : new Date(v as string);
       const prev = before[field as keyof ApiKey];
-      if (JSON.stringify(prev) === JSON.stringify(next)) continue;
+      const same = next instanceof Date || prev instanceof Date ? (prev as Date | null)?.getTime() === (next as Date | null)?.getTime() : JSON.stringify(prev) === JSON.stringify(next);
+      if (same) continue;
       (data as Record<string, unknown>)[field] = next;
       changes[field] = { from: prev, to: next };
     }
-    if (!Object.keys(changes).length) return toPolicyView(before);
+    if (!Object.keys(changes).length) return this.view(before);
+    if (changes.mode && before.mode === 'sandbox' && changes.mode.to !== 'sandbox') {
+      await this.domains?.assertReadyForLive((data.fromAddress as string | undefined) ?? before.fromAddress);
+      // First time out of sandbox: the warm-up starts now.
+      if (!before.liveSince) data.liveSince = new Date();
+    }
     const key = await this.prisma.apiKey.update({ where: { id }, data });
     const action = changes.mode
       ? changes.mode.to === 'live'
@@ -174,22 +253,30 @@ export class KeysService {
           : 'key.disable'
         : 'key.policy_update';
     await this.audit.record(actor, { action, targetType: 'api_key', targetId: id, details: { name: key.name, changes } });
-    return toPolicyView(key);
+    return this.view(key);
   }
 
   async setEnabled(id: string, enabled: boolean, actor: Actor): Promise<PolicyView> {
     return this.update(id, { enabled }, actor);
   }
 
-  async rotate(id: string, actor: Actor): Promise<{ key: PolicyView; secret: string }> {
+  /** New secret. With `graceMinutes` the previous secret keeps working that long, so clients can switch without downtime. */
+  async rotate(id: string, actor: Actor, body: unknown = {}): Promise<{ key: PolicyView; secret: string }> {
+    const { graceMinutes = 0 } = await validateDto(RotateKeyDto, body ?? {});
     const before = await this.getActive(id);
     const secret = generateApiKey(before.mode);
     const key = await this.prisma.apiKey.update({
       where: { id },
-      data: { keyHash: hashApiKey(secret), keyPrefix: displayPrefix(secret), rotatedAt: new Date() },
+      data: {
+        keyHash: hashApiKey(secret),
+        keyPrefix: displayPrefix(secret),
+        rotatedAt: new Date(),
+        prevKeyHash: graceMinutes > 0 ? before.keyHash : null,
+        prevKeyExpiresAt: graceMinutes > 0 ? new Date(Date.now() + graceMinutes * 60_000) : null,
+      },
     });
-    await this.audit.record(actor, { action: 'key.rotate', targetType: 'api_key', targetId: id, details: { name: key.name } });
-    return { key: toPolicyView(key), secret };
+    await this.audit.record(actor, { action: 'key.rotate', targetType: 'api_key', targetId: id, details: { name: key.name, graceMinutes } });
+    return { key: this.view(key), secret };
   }
 
   async remove(id: string, actor: Actor): Promise<void> {
@@ -201,6 +288,8 @@ export class KeysService {
         enabled: false,
         name: `${k.name}~deleted~${id.slice(-8)}`,
         keyHash: `deleted:${id}`,
+        prevKeyHash: null,
+        prevKeyExpiresAt: null,
       },
     });
     await this.audit.record(actor, { action: 'key.delete', targetType: 'api_key', targetId: id, details: { name: k.name } });
@@ -239,10 +328,14 @@ export class KeysService {
       }),
       this.prisma.apiKey.count({ where }),
     ]);
-    return { items: items.map(toPolicyView), total, page, pageSize };
+    return { items: items.map((k) => this.view(k)), total, page, pageSize };
   }
 }
 
 function dedupe(a: string[]): string[] {
   return [...new Set(a.map((s) => s.trim().toLowerCase()))];
+}
+
+function dedupeKeepCase(a: string[]): string[] {
+  return [...new Set(a.map((s) => s.trim()))];
 }

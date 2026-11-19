@@ -1,7 +1,8 @@
 // Authored by Tomás Neto (TN 2026)
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { KeyRound, ShieldCheck } from 'lucide-react';
+import { startAuthentication } from '@simplewebauthn/browser';
+import { Fingerprint, KeyRound, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ApiError, api, call, errorMessage, setCsrfToken, type Schemas } from '@/api/client';
 import { useAuthConfig } from '@/api/queries';
@@ -9,7 +10,7 @@ import { CopyButton, Field } from '@/components/common/page';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-type Step = { kind: 'credentials' } | { kind: 'enroll'; data?: Schemas['TotpEnrollDto'] } | { kind: 'verify' };
+type Step = { kind: 'credentials' } | { kind: 'enroll'; data?: Schemas['TotpEnrollDto'] } | { kind: 'verify'; methods?: Array<'passkey' | 'totp'> };
 
 export function AuthCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
@@ -63,7 +64,23 @@ export function LoginPage() {
       if (r.next === 'totp_enroll') {
         const data = await call(api.POST('/admin/auth/totp/enroll'));
         setStep({ kind: 'enroll', data });
-      } else setStep({ kind: 'verify' });
+      } else if (r.next === 'second_factor') setStep({ kind: 'verify', methods: r.methods ?? ['passkey'] });
+      else setStep({ kind: 'verify', methods: ['totp'] });
+    });
+
+  const passkeyLogin = () =>
+    run(async () => {
+      const optionsJSON = await call(api.POST('/admin/auth/passkey/options'));
+      let response;
+      try {
+        response = await startAuthentication({ optionsJSON: optionsJSON as never });
+      } catch (e) {
+        throw new Error((e as Error).name === 'NotAllowedError' ? 'The passkey prompt was cancelled or timed out.' : (e as Error).message);
+      }
+      const s = await call(api.POST('/admin/auth/passkey/verify', { body: { response: response as never } }));
+      setCsrfToken(s.csrfToken);
+      qc.setQueryData(['session'], s);
+      navigate({ to: '/' });
     });
 
   const verify = () =>
@@ -119,16 +136,37 @@ export function LoginPage() {
     );
   }
 
+  const methods = step.kind === 'verify' ? (step.methods ?? ['totp']) : ['totp'];
+  const withPasskey = methods.includes('passkey');
+  const withCode = methods.includes('totp');
+
   return (
     <AuthCard
       title={step.kind === 'enroll' ? 'Set up two-factor authentication' : 'Two-factor authentication'}
       subtitle={
         step.kind === 'enroll'
           ? 'This gateway requires two-factor authentication. Scan the QR code with an authenticator app (1Password, Authy, Google Authenticator…), then enter the 6-digit code.'
-          : 'Enter the 6-digit code from your authenticator app.'
+          : withPasskey
+            ? withCode
+              ? 'Use your passkey, or enter the 6-digit code from your authenticator app.'
+              : 'Confirm with your passkey or security key.'
+            : 'Enter the 6-digit code from your authenticator app.'
       }
     >
-      <form
+      {withPasskey && (
+        <div className="mb-4 grid gap-3">
+          <Button onClick={() => void passkeyLogin()} disabled={busy}>
+            <Fingerprint className="size-4" /> Use passkey
+          </Button>
+          {!withCode && error && (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
+            </p>
+          )}
+          {withCode && <div className="text-muted-foreground text-center text-xs">or</div>}
+        </div>
+      )}
+      {withCode && <form
         className="grid gap-4"
         onSubmit={(e) => {
           e.preventDefault();
@@ -164,10 +202,10 @@ export function LoginPage() {
             {error}
           </p>
         )}
-        <Button type="submit" disabled={busy || code.length !== 6}>
+        <Button type="submit" variant={withPasskey ? 'outline' : 'default'} disabled={busy || code.length !== 6}>
           <ShieldCheck className="size-4" /> Verify
         </Button>
-      </form>
+      </form>}
     </AuthCard>
   );
 }

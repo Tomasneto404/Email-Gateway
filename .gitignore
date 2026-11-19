@@ -14,3 +14,4 @@ ui/playwright-report/
 # deploy/compose.yaml run from inside the repo: generated secrets and data
 deploy/secrets/
 deploy/data/
+deploy/backups/

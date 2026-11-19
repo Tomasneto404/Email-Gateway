@@ -2,6 +2,8 @@
 import { Inject, Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { Worker } from 'bullmq';
 import { APP_CONFIG, AppConfig } from '../config/config';
+import { AuditChainService } from '../admin/audit-chain.service';
+import { AlertsService } from '../alerts/alerts.service';
 import { EventLogger } from '../common/event-logger';
 import { PrismaService } from '../common/prisma.service';
 import { MAINTENANCE_QUEUE, QUEUE_PREFIX, QueueService, redisConnection } from '../queue/queue.service';
@@ -16,6 +18,8 @@ export class RetentionService implements OnApplicationBootstrap, OnApplicationSh
     private readonly prisma: PrismaService,
     private readonly queues: QueueService,
     private readonly events: EventLogger,
+    private readonly chain: AuditChainService,
+    private readonly alerts: AlertsService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -43,10 +47,26 @@ export class RetentionService implements OnApplicationBootstrap, OnApplicationSh
       FROM messages m WHERE a.message_id = m.id AND m.created_at < ${bodyCutoff} AND a.content IS NOT NULL`;
     const deleted = await this.prisma.message.deleteMany({ where: { createdAt: { lt: recordCutoff } } });
     const deletedStats = await this.prisma.messageStatsHourly.deleteMany({ where: { bucket: { lt: recordCutoff } } });
-    const deletedAudit = await this.prisma.adminAudit.deleteMany({ where: { at: { lt: recordCutoff } } });
+    // The activity log is a hash chain: pruning moves its anchor instead of breaking it.
+    const deletedAudit = await this.chain.prune(recordCutoff);
+    const deletedAlerts = await this.prisma.alertEvent.deleteMany({ where: { at: { lt: recordCutoff } } });
 
-    const result = { purgedBodies, purgedAttachments, deletedMessages: deleted.count, deletedStats: deletedStats.count, deletedAdminAudit: deletedAudit.count };
-    this.events.emit('retention_completed', { outcome: 'success', ...result });
+    // Daily integrity check of the activity log.
+    const chain = await this.chain.verify();
+    if (!chain.ok) {
+      await this.alerts.raise('audit_chain_broken', `Activity log integrity check failed at row ${chain.brokenAtSeq}`, { reason: chain.reason, row: chain.brokenAtSeq, checked: chain.checked }, 'daily');
+    }
+
+    const result = {
+      purgedBodies,
+      purgedAttachments,
+      deletedMessages: deleted.count,
+      deletedStats: deletedStats.count,
+      deletedAdminAudit: deletedAudit,
+      deletedAlerts: deletedAlerts.count,
+      auditChainOk: chain.ok,
+    };
+    this.events.emit('retention_completed', { outcome: chain.ok ? 'success' : 'failure', ...result });
     return result;
   }
 }

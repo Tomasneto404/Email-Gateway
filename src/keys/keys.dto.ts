@@ -7,6 +7,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
   Matches,
@@ -16,7 +17,8 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { IsPlainEmail, IsRecipientRule, NoCrlf } from '../common/validators';
+import { isIpRule } from '../common/ip';
+import { EachMatches, HOST_RE, IsPlainEmail, IsRecipientRule, MIME_PATTERN_RE, NAME_RE, NoCrlf } from '../common/validators';
 
 const lower = ({ value }: { value: unknown }) =>
   Array.isArray(value) ? value.map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : v)) : value;
@@ -72,6 +74,56 @@ export class PolicyFieldsDto {
   @ApiPropertyOptional({ enum: LIVE_PROVIDERS, nullable: true, type: String, description: 'Live provider override; null = gateway default (LIVE_PROVIDER).' })
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsIn(LIVE_PROVIDERS)
   liveProvider?: (typeof LIVE_PROVIDERS)[number] | null;
+
+  // ---- access
+  @ApiPropertyOptional({ type: [String], description: 'Source IPs or CIDR ranges allowed to use the key ("10.0.0.0/24", "2001:db8::/32"). Empty = any.' })
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @EachMatches('isIpRule', isIpRule, 'entries must be IP addresses or CIDR ranges')
+  allowedIps?: string[];
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'ISO date-time after which the key stops working. null = never.' })
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsISO8601({ strict: true })
+  expiresAt?: string | null;
+
+  // ---- content
+  @ApiPropertyOptional({ type: [String], description: 'Domains links in the body may point to (subdomains included). Empty = any.' })
+  @IsOptional() @Transform(lower) @IsArray() @ArrayMaxSize(200) @EachMatches('isHost', (v) => HOST_RE.test(v), 'entries must be domain names like "example.com"')
+  allowedLinkDomains?: string[];
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Maximum distinct links per message. null = unlimited.' })
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(0) @Max(1000)
+  maxLinks?: number | null;
+
+  @ApiPropertyOptional({ description: 'Refuse bodies containing credentials, private keys, card or bank numbers (default true).' })
+  @IsOptional() @IsBoolean()
+  blockSecrets?: boolean;
+
+  @ApiPropertyOptional({ type: [String], description: 'MIME types allowed as attachments ("application/pdf", "image/*"). Empty = any. Executables are always refused.' })
+  @IsOptional() @Transform(lower) @IsArray() @ArrayMaxSize(50) @EachMatches('isMimePattern', (v) => MIME_PATTERN_RE.test(v), 'entries must look like "type/subtype" or "type/*"')
+  allowedAttachmentTypes?: string[];
+
+  @ApiPropertyOptional({ description: 'Virus-scan attachments with ClamAV (needs CLAMAV_HOST on the gateway).' })
+  @IsOptional() @IsBoolean()
+  scanAttachments?: boolean;
+
+  // ---- templates
+  @ApiPropertyOptional({ description: 'Only server-side templates may be sent; free-form subject/text/html are refused.' })
+  @IsOptional() @IsBoolean()
+  templatesOnly?: boolean;
+
+  @ApiPropertyOptional({ type: [String], description: 'Template names the key may use. Empty = any template.' })
+  @IsOptional() @IsArray() @ArrayMaxSize(200) @EachMatches('isTemplateName', (v) => NAME_RE.test(v), 'entries must be template names')
+  allowedTemplates?: string[];
+
+  // ---- volume
+  @ApiPropertyOptional({ description: 'Ramp up the daily volume over the first days after the key leaves sandbox (WARMUP_SCHEDULE).' })
+  @IsOptional() @IsBoolean()
+  warmup?: boolean;
+}
+
+export class RotateKeyDto {
+  @ApiPropertyOptional({ description: 'Minutes the previous secret keeps working (0-10080). 0 = it stops immediately.' })
+  @IsOptional() @IsInt() @Min(0) @Max(10_080)
+  graceMinutes?: number;
 }
 
 export class CreateKeyDto extends PolicyFieldsDto {

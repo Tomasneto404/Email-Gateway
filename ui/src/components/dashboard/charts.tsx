@@ -161,12 +161,23 @@ export function BarList({
   );
 }
 
-export function StatTile({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: 'warn' | 'bad' }) {
+/** "+12% vs previous 24h", "3 fewer vs previous 24h", "no change vs …"; null without data. */
+export function changeVs(cur: number | undefined, prev: number | undefined, period: string): string | null {
+  if (cur === undefined || prev === undefined) return null;
+  if (cur === prev) return `no change vs ${period}`;
+  if (prev === 0) return `${fmtNum(cur)} more vs ${period}`;
+  const pct = ((cur - prev) / prev) * 100;
+  if (Math.abs(pct) < 1000) return `${pct > 0 ? '+' : '−'}${Math.abs(pct) < 10 ? Math.abs(pct).toFixed(1) : Math.round(Math.abs(pct))}% vs ${period}`;
+  return `${fmtNum(Math.abs(cur - prev))} ${cur > prev ? 'more' : 'fewer'} vs ${period}`;
+}
+
+export function StatTile({ label, value, hint, tone, change }: { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: 'warn' | 'bad'; change?: string | null }) {
   return (
     <div className="bg-card flex flex-col rounded-xl border px-5 py-4 shadow-[var(--shadow-sm)]">
       <div className="text-secondary-foreground text-sm">{label}</div>
       <div className={cn('tabular mt-2 text-[28px] leading-8 font-medium', tone === 'bad' && 'text-destructive', tone === 'warn' && 'text-warning-foreground')}>{value}</div>
-      <div className="text-muted-foreground mt-1 min-h-4 text-xs leading-4">{hint}</div>
+      <div className="text-secondary-foreground tabular mt-1 min-h-4 text-xs leading-4">{change}</div>
+      <div className="text-muted-foreground mt-0.5 min-h-4 text-xs leading-4">{hint}</div>
     </div>
   );
 }

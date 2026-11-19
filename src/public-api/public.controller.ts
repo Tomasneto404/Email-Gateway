@@ -5,7 +5,9 @@ import type { Response } from 'express';
 import { GatewayError } from '../common/errors';
 import { clientIp } from '../common/http';
 import { ApiKeyGuard, ApiKeyRequest } from '../keys/api-key.guard';
-import { toPolicyView } from '../keys/keys.service';
+import { KeysService } from '../keys/keys.service';
+import { PublicTemplateDto } from '../templates/templates.dto';
+import { TemplatesService } from '../templates/templates.service';
 import { toStatusView } from '../messages/messages.repository';
 import { MessagesRepository } from '../messages/messages.repository';
 import { QuotaService } from '../policy/quota.service';
@@ -22,6 +24,8 @@ export class PublicController {
     private readonly send: SendService,
     private readonly messages: MessagesRepository,
     private readonly quota: QuotaService,
+    private readonly keys: KeysService,
+    private readonly templatesSvc: TemplatesService,
   ) {}
 
   @Post('send')
@@ -39,13 +43,16 @@ export class PublicController {
   @ApiBody({ type: SendDto })
   @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'Optional, 1-255 printable ASCII chars. Same key within 24h returns the original message.' })
   @ApiResponse({ status: 202, type: SendAcceptedDto, description: 'Accepted. Header Idempotent-Replayed: true when an earlier request with the same Idempotency-Key is returned.' })
-  @ApiResponse({ status: 400, type: ErrorResponseDto, description: 'VALIDATION_FAILED, FROM_NOT_ALLOWED, TOO_MANY_RECIPIENTS, REPLY_TO_NOT_ALLOWED, ATTACHMENTS_NOT_ALLOWED' })
-  @ApiResponse({ status: 401, type: ErrorResponseDto, description: 'UNAUTHORIZED, INVALID_API_KEY' })
-  @ApiResponse({ status: 403, type: ErrorResponseDto, description: 'RECIPIENT_NOT_ALLOWED, KEY_DISABLED' })
+  @ApiResponse({ status: 400, type: ErrorResponseDto, description: 'VALIDATION_FAILED, FROM_NOT_ALLOWED, TOO_MANY_RECIPIENTS, TOO_MANY_LINKS, REPLY_TO_NOT_ALLOWED, ATTACHMENTS_NOT_ALLOWED' })
+  @ApiResponse({ status: 401, type: ErrorResponseDto, description: 'UNAUTHORIZED, INVALID_API_KEY, KEY_EXPIRED' })
+  @ApiResponse({ status: 403, type: ErrorResponseDto, description: 'RECIPIENT_NOT_ALLOWED, LINK_NOT_ALLOWED, KEY_DISABLED, IP_NOT_ALLOWED, TEMPLATE_REQUIRED, TEMPLATE_NOT_ALLOWED' })
+  @ApiResponse({ status: 404, type: ErrorResponseDto, description: 'TEMPLATE_NOT_FOUND' })
   @ApiResponse({ status: 409, type: ErrorResponseDto, description: 'DUPLICATE_MESSAGE, IDEMPOTENCY_CONFLICT' })
   @ApiResponse({ status: 413, type: ErrorResponseDto, description: 'MESSAGE_TOO_LARGE, ATTACHMENT_TOO_LARGE, REQUEST_TOO_LARGE' })
-  @ApiResponse({ status: 429, type: ErrorResponseDto, description: 'QUOTA_EXCEEDED, GLOBAL_RATE_LIMITED, AUTH_RATE_LIMITED (see Retry-After)' })
-  @ApiResponse({ status: 503, type: ErrorResponseDto, description: 'GATEWAY_PAUSED, PROVIDER_UNAVAILABLE, QUEUE_UNAVAILABLE' })
+  @ApiResponse({ status: 415, type: ErrorResponseDto, description: 'ATTACHMENT_TYPE_NOT_ALLOWED' })
+  @ApiResponse({ status: 422, type: ErrorResponseDto, description: 'CONTENT_BLOCKED (credentials, keys, card/bank numbers in the body), ATTACHMENT_INFECTED' })
+  @ApiResponse({ status: 429, type: ErrorResponseDto, description: 'QUOTA_EXCEEDED (also during warm-up), DOMAIN_RATE_LIMITED, GLOBAL_RATE_LIMITED, AUTH_RATE_LIMITED (see Retry-After)' })
+  @ApiResponse({ status: 503, type: ErrorResponseDto, description: 'GATEWAY_PAUSED, PROVIDER_UNAVAILABLE, QUEUE_UNAVAILABLE, ATTACHMENT_SCAN_UNAVAILABLE' })
   async sendEmail(
     @Req() req: ApiKeyRequest,
     @Body() body: unknown,
@@ -85,14 +92,28 @@ export class PublicController {
   async me(@Req() req: ApiKeyRequest) {
     const k = req.apiKey;
     const usage = (await this.quota.usage([k.id]))[k.id] ?? { hour: 0, day: 0 };
-    const { id: _id, keyPrefix, ...view } = toPolicyView(k);
+    const { id: _id, keyPrefix, allowedIps: _ips, ...view } = this.keys.view(k);
+    const dayLimit = view.warmupState ? Math.min(k.quotaPerDay, view.warmupState.dailyCap) : k.quotaPerDay;
     return {
       ...view,
       keyPrefix,
       usage: {
         hour: { used: usage.hour, limit: k.quotaPerHour, remaining: Math.max(0, k.quotaPerHour - usage.hour) },
-        day: { used: usage.day, limit: k.quotaPerDay, remaining: Math.max(0, k.quotaPerDay - usage.day) },
+        day: { used: usage.day, limit: dayLimit, remaining: Math.max(0, dayLimit - usage.day) },
       },
     };
+  }
+
+  @Get('templates')
+  @ApiOperation({
+    operationId: 'listMyTemplates',
+    summary: 'Templates your key may send',
+    description:
+      'Server-side templates available to the calling key. Send one with {"to": ..., "template": "<name>", "variables": {...}}: every listed variable is required. ' +
+      'Keys with templatesOnly=true can only send templates.',
+  })
+  @ApiResponse({ status: 200, type: [PublicTemplateDto] })
+  templates(@Req() req: ApiKeyRequest) {
+    return this.templatesSvc.forKey(req.apiKey);
   }
 }

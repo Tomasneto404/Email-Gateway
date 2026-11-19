@@ -2,6 +2,7 @@
 import { Inject, Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { DelayedError, Job, UnrecoverableError, Worker } from 'bullmq';
 import { APP_CONFIG, AppConfig } from '../config/config';
+import { BodyCrypto } from '../common/body-crypto';
 import { EventLogger } from '../common/event-logger';
 import { GatewayStateService } from '../gateway-state/gateway-state.service';
 import { MessagesRepository } from '../messages/messages.repository';
@@ -25,6 +26,7 @@ export class DeliveryWorker implements OnApplicationBootstrap, OnApplicationShut
     private readonly gateway: GatewayStateService,
     private readonly events: EventLogger,
     private readonly metrics: MetricsService,
+    private readonly crypto: BodyCrypto,
   ) {}
 
   onApplicationBootstrap() {
@@ -80,11 +82,11 @@ export class DeliveryWorker implements OnApplicationBootstrap, OnApplicationShut
       bcc: msg.bcc,
       replyTo: msg.replyTo,
       subject: msg.subject,
-      text: msg.textBody,
-      html: msg.htmlBody,
+      text: this.crypto.openText(msg.textBody),
+      html: this.crypto.openText(msg.htmlBody),
       attachments: msg.attachments
         .filter((a) => a.content)
-        .map((a) => ({ filename: a.filename, contentType: a.contentType, content: Buffer.from(a.content as Uint8Array) })),
+        .map((a) => ({ filename: a.filename, contentType: a.contentType, content: this.crypto.openBytes(a.content as Uint8Array) })),
       headers: gatewayHeaders(keyName, msg.id),
     };
 

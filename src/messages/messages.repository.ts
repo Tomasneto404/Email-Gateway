@@ -1,5 +1,6 @@
 // Authored by Tomás Neto (TN 2026)
 import { Injectable } from '@nestjs/common';
+import { BodyCrypto } from '../common/body-crypto';
 import { hourBucket } from '../common/time';
 import { PrismaService } from '../common/prisma.service';
 import { Message, MessageStatus, Prisma } from '../generated/prisma/client';
@@ -57,7 +58,10 @@ export function toStatusView(m: Message): MessageStatusView {
  */
 @Injectable()
 export class MessagesRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crypto: BodyCrypto,
+  ) {}
 
   async bumpStats(tx: Tx | PrismaService, apiKeyId: string, status: string, reason = '', at = new Date()) {
     await tx.$executeRaw`
@@ -67,14 +71,17 @@ export class MessagesRepository {
       DO UPDATE SET count = message_stats_hourly.count + 1`;
   }
 
+  /** Bodies and attachment contents are encrypted at rest here (see BodyCrypto). */
   async create(data: MessageCreate): Promise<Message> {
     const { attachments, ...row } = data;
     return this.prisma.$transaction(async (tx) => {
       const msg = await tx.message.create({
         data: {
           ...row,
+          textBody: this.crypto.sealText(row.textBody),
+          htmlBody: this.crypto.sealText(row.htmlBody),
           ...(attachments?.length
-            ? { attachments: { create: attachments.map((a) => ({ ...a, content: new Uint8Array(a.content) })) } }
+            ? { attachments: { create: attachments.map((a) => ({ ...a, content: new Uint8Array(this.crypto.sealBytes(a.content)) })) } }
             : {}),
         },
       });

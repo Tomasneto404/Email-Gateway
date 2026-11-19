@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { usePauseGateway, useResumeGateway, useStats, useSystemState } from '@/api/queries';
 import { Dot, Signal } from '@/components/common/badges';
 import { PageHeader } from '@/components/common/page';
-import { BarList, Legend, StatTile, VolumeChart } from '@/components/dashboard/charts';
+import { BarList, Legend, StatTile, VolumeChart, changeVs } from '@/components/dashboard/charts';
 import { Segmented } from '@/components/keys/segmented';
 import { PauseDialog } from '@/components/layout/app-shell';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,8 @@ export function DashboardPage() {
   const [confirm, setConfirm] = useState(false);
   const g = sys.data?.gateway;
   const t = stats.data?.totals;
+  const p = stats.data?.previousTotals;
+  const period = { '24h': 'previous 24h', '7d': 'previous 7 days', '30d': 'previous 30 days' }[range];
   const delivered = t ? t.sent + t.captured : 0;
   const rejectRate = t && t.accepted + t.rejected > 0 ? (t.rejected / (t.accepted + t.rejected)) * 100 : 0;
   const bounces = stats.data?.outcomes.filter((o) => o.outcome === 'bounced' || o.outcome === 'complained').reduce((n, o) => n + o.count, 0) ?? 0;
@@ -51,7 +53,7 @@ export function DashboardPage() {
           />
         }
       />
-      <div className="grid w-full max-w-[1600px] gap-4 px-8 py-6">
+      <div className="grid w-full max-w-[1600px] gap-4 px-4 sm:px-8 py-6">
         <section
           aria-label="Gateway state"
           data-tour="gateway-state"
@@ -103,10 +105,27 @@ export function DashboardPage() {
         </section>
 
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          <StatTile label="Accepted" value={t ? fmtNum(t.accepted) : '—'} hint={t ? `${fmtNum(t.accepted + t.rejected)} requests` : undefined} />
-          <StatTile label="Delivered" value={t ? fmtNum(delivered) : '—'} hint={t ? `${fmtNum(t.sent)} live · ${fmtNum(t.captured)} sandbox` : undefined} />
-          <StatTile label="Rejected" value={t ? fmtNum(t.rejected) : '—'} hint={t ? `${rejectRate.toFixed(1)}% of requests` : undefined} tone={rejectRate > 20 ? 'warn' : undefined} />
-          <StatTile label="Failed" value={t ? fmtNum(t.failed) : '—'} tone={t && t.failed > 0 ? 'bad' : undefined} hint={bounces ? `${fmtNum(bounces)} bounces or complaints` : 'after all retries'} />
+          <StatTile label="Accepted" value={t ? fmtNum(t.accepted) : '—'} change={changeVs(t?.accepted, p?.accepted, period)} hint={t ? `${fmtNum(t.accepted + t.rejected)} requests` : undefined} />
+          <StatTile
+            label="Delivered"
+            value={t ? fmtNum(delivered) : '—'}
+            change={changeVs(t ? delivered : undefined, p ? p.sent + p.captured : undefined, period)}
+            hint={t ? `${fmtNum(t.sent)} live · ${fmtNum(t.captured)} sandbox` : undefined}
+          />
+          <StatTile
+            label="Rejected"
+            value={t ? fmtNum(t.rejected) : '—'}
+            change={changeVs(t?.rejected, p?.rejected, period)}
+            hint={t ? `${rejectRate.toFixed(1)}% of requests` : undefined}
+            tone={rejectRate > 20 ? 'warn' : undefined}
+          />
+          <StatTile
+            label="Failed"
+            value={t ? fmtNum(t.failed) : '—'}
+            change={changeVs(t?.failed, p?.failed, period)}
+            tone={t && t.failed > 0 ? 'bad' : undefined}
+            hint={bounces ? `${fmtNum(bounces)} bounces or complaints` : 'after all retries'}
+          />
           <StatTile
             label="Awaiting approval"
             value={sys.data ? fmtNum(sys.data.pendingApprovals) : '—'}

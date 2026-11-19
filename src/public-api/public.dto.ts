@@ -60,5 +60,21 @@ export class MeResponseDto {
   @ApiProperty() attachmentsAllowed!: boolean;
   @ApiProperty() maxAttachmentBytes!: number;
   @ApiPropertyOptional({ enum: ['smtp', 'resend'], nullable: true, type: String }) liveProvider!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'The key stops working at this time (ISO). null = never.' }) expiresAt!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'After a rotation, the previous secret keeps working until then. Switch to the new one before.' }) previousSecretValidUntil!: string | null;
+  @ApiProperty({ type: [String], description: 'Domains links in the body may point to (subdomains included). Empty = any.' }) allowedLinkDomains!: string[];
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'Max distinct links per message. null = unlimited.' }) maxLinks!: number | null;
+  @ApiProperty({ description: 'Bodies with credentials, private keys, card or bank numbers are refused (CONTENT_BLOCKED).' }) blockSecrets!: boolean;
+  @ApiProperty({ type: [String], description: 'Allowed attachment MIME types ("image/*" wildcards). Empty = any. Executables are always refused.' }) allowedAttachmentTypes!: string[];
+  @ApiProperty({ description: 'Attachments are virus-scanned.' }) scanAttachments!: boolean;
+  @ApiProperty({ description: 'Only server-side templates may be sent (see GET /v1/templates).' }) templatesOnly!: boolean;
+  @ApiProperty({ type: [String], description: 'Templates the key may use. Empty = any.' }) allowedTemplates!: string[];
+  @ApiPropertyOptional({
+    type: 'object',
+    nullable: true,
+    description: 'While warming up after going live: today\'s daily cap ({day, days, dailyCap}). usage.day.limit already includes it.',
+    properties: { day: { type: 'number' }, days: { type: 'number' }, dailyCap: { type: 'number' } },
+  })
+  warmupState!: { day: number; days: number; dailyCap: number } | null;
   @ApiProperty({ type: UsageDto }) usage!: UsageDto;
 }

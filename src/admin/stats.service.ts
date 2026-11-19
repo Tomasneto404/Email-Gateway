@@ -38,7 +38,8 @@ export class StatsService {
     const keyFilter = q.keyId ? Prisma.sql`AND api_key_id = ${q.keyId}::uuid` : Prisma.empty;
     const range = Prisma.sql`bucket >= ${truncate(from, bucket)} AND bucket < ${to}`;
 
-    const [rows, reasons, top, outcomes] = await Promise.all([
+    const prevFrom = new Date(truncate(from, bucket).getTime() - (to.getTime() - truncate(from, bucket).getTime()));
+    const [rows, reasons, top, outcomes, prevRows] = await Promise.all([
       this.prisma.$queryRaw<Array<{ t: Date; status: string; n: bigint }>>`
         SELECT date_trunc(${bucket}, bucket AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS t, status, SUM(count)::bigint AS n
         FROM message_stats_hourly WHERE ${range} ${keyFilter}
@@ -57,7 +58,14 @@ export class StatsService {
         SELECT status, SUM(count)::bigint AS n FROM message_stats_hourly
         WHERE ${range} ${keyFilter} AND status LIKE 'outcome:%'
         GROUP BY status`,
+      this.prisma.$queryRaw<Array<{ status: string; n: bigint }>>`
+        SELECT status, SUM(count)::bigint AS n FROM message_stats_hourly
+        WHERE bucket >= ${prevFrom} AND bucket < ${truncate(from, bucket)} ${keyFilter}
+          AND status IN ('accepted','sent','captured','failed','rejected')
+        GROUP BY status`,
     ]);
+    const previousTotals: Record<SeriesStatus, number> = { accepted: 0, sent: 0, captured: 0, failed: 0, rejected: 0 };
+    for (const r of prevRows) previousTotals[r.status as SeriesStatus] += Number(r.n);
 
     // Zero-filled series.
     const points = new Map<number, Record<SeriesStatus, number>>();
@@ -76,6 +84,7 @@ export class StatsService {
       from: from.toISOString(),
       to: to.toISOString(),
       totals,
+      previousTotals,
       series: [...points.entries()].map(([t, v]) => ({ t: new Date(t).toISOString(), ...v })),
       rejectionsByReason: reasons.map((r) => ({ reason: r.reason || 'unknown', count: Number(r.n) })),
       topKeys: top.map((r) => ({ keyId: r.key_id, name: r.name, count: Number(r.n) })),

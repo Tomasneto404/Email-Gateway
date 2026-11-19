@@ -19,7 +19,13 @@ import { ExportService } from './admin/export.service';
 import { AccountController, AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { AuthentikService } from './auth/authentik.service';
-import { SecretBox } from './auth/crypto';
+import { PasskeysService } from './auth/passkeys.service';
+import { AdminAlertsController, AlertChannelsService } from './alerts/alerts.admin';
+import { AuditChainBootstrap } from './admin/audit-chain.bootstrap';
+import { DomainCheckService } from './keys/domain-check.service';
+import { ClamavService } from './policy/clamav.service';
+import { AdminTemplatesController } from './templates/templates.controller';
+import { TemplatesService } from './templates/templates.service';
 import { SessionsService } from './auth/sessions.service';
 import { RolesService } from './auth/roles.service';
 import { SystemMailService } from './auth/system-mail.service';
@@ -53,13 +59,18 @@ export const API_PROVIDERS = [
   GatewayExceptionFilter,
   StatsService,
   ExportService,
-  SecretBox,
   SessionsService,
   UsersService,
   RolesService,
   SystemMailService,
   AuthService,
   AuthentikService,
+  TemplatesService,
+  ClamavService,
+  DomainCheckService,
+  PasskeysService,
+  AlertChannelsService,
+  AuditChainBootstrap,
 ];
 
 @Module({})
@@ -99,6 +110,8 @@ export class ApiModule {
         AdminRolesController,
         AdminAuditController,
         AdminSettingsController,
+        AdminTemplatesController,
+        AdminAlertsController,
         ResendWebhookController,
         HealthController,
       ],

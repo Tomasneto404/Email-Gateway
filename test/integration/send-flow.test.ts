@@ -1,6 +1,8 @@
 // Authored by Tomás Neto (TN 2026)
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { EventLogger } from '../../src/common/event-logger';
+import { AuditChainService } from '../../src/admin/audit-chain.service';
+import { AlertsService } from '../../src/alerts/alerts.service';
 import { RetentionService } from '../../src/worker/retention.service';
 import { ADMIN_TOKEN, Stack, createKey, mailpit, resetState, startStack, uname, waitFor } from '../helpers/stack';
 
@@ -275,7 +277,7 @@ describe('retention', () => {
     const { secret } = await createKey(s, { name: uname('ret') });
     const sent = await s.http.post('/v1/send').set(auth(secret)).send({ to: 'a@example.com', subject: 'old', text: 'secret body' });
     await statusOf(secret, sent.body.id, ['captured']);
-    const svc = new RetentionService(s.cfg, s.prisma, {} as never, s.api.get(EventLogger));
+    const svc = new RetentionService(s.cfg, s.prisma, {} as never, s.api.get(EventLogger), s.api.get(AuditChainService), s.api.get(AlertsService));
     const res = await svc.run(new Date(Date.now() + (s.cfg.AUDIT_BODY_RETENTION_DAYS + 1) * 86_400_000));
     expect(res.purgedBodies).toBeGreaterThan(0);
     const row = await s.prisma.message.findUnique({ where: { id: sent.body.id } });

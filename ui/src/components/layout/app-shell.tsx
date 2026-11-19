@@ -3,12 +3,17 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   Activity,
+  Bell,
   BookOpen,
   CheckCheck,
+  FileText,
+  Fingerprint,
   KeyRound,
   LayoutDashboard,
+  Lock,
   LogOut,
   Mail,
+  Menu,
   Monitor,
   Moon,
   PauseCircle,
@@ -24,7 +29,10 @@ import {
 import { useEffect, useState } from 'react';
 import { api, call, setCsrfToken } from '@/api/client';
 import { usePauseGateway, useResumeGateway, useSystemState } from '@/api/queries';
+import { AccountSecurityDialog } from '@/components/account/account-security-dialog';
 import { TwoFactorDialog } from '@/components/account/two-factor-dialog';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { TourPrompt, TourProvider, useTour } from '@/components/tour/tour';
 import { Dot } from '@/components/common/badges';
 import { ConfirmDialog } from '@/components/confirm/confirm-dialog';
@@ -42,6 +50,8 @@ export const NAV = [
   { to: '/approvals', label: 'Approvals', icon: CheckCheck, key: 'g a', perms: ['messages:read'] },
   { to: '/users', label: 'Admin users', icon: Users, key: 'g u', perms: ['users:read'] },
   { to: '/roles', label: 'Roles', icon: Shield, key: 'g r', perms: ['users:read', 'roles:manage'] },
+  { to: '/templates', label: 'Templates', icon: FileText, key: 'g t', perms: ['templates:read'] },
+  { to: '/alerts', label: 'Alerts', icon: Bell, key: 'g n', perms: ['alerts:read'] },
   { to: '/activity', label: 'Activity log', icon: Activity, key: 'g l', perms: ['audit:read'] },
   { to: '/settings', label: 'Settings', icon: Settings, key: 'g s', perms: ['settings:read'] },
 ] as const;
@@ -90,6 +100,8 @@ function Shell() {
   const [cmd, setCmd] = useState(false);
   const [confirmPause, setConfirmPause] = useState(false);
   const [twoFactor, setTwoFactor] = useState(false);
+  const [security, setSecurity] = useState<'password' | 'passkeys' | null>(null);
+  const [mobileNav, setMobileNav] = useState(false);
   const pause = usePauseGateway();
   const resume = useResumeGateway();
 
@@ -131,16 +143,19 @@ function Shell() {
 
   const isActive = (to: string) => (to === '/' ? path === '/ui/' || path === '/ui' || path === '/' : path.includes(to));
 
-  return (
-    <div className="flex h-dvh overflow-hidden">
-      <aside className="bg-sidebar hidden w-60 shrink-0 flex-col border-r md:flex">
+  /** Sidebar body, shared by the desktop sidebar and the mobile menu sheet. */
+  const sidebar = (mobile: boolean) => (
+    <>
         <div className="flex h-14 items-center justify-between gap-2 px-5">
           <span className="text-[15px] font-medium">mail-gateway</span>
-          <GatewayPill />
+          {!mobile && <GatewayPill />}
         </div>
         <button
           data-tour="search"
-          onClick={() => setCmd(true)}
+          onClick={() => {
+            setMobileNav(false);
+            setCmd(true);
+          }}
           className="text-muted-foreground hover:text-foreground bg-card mx-3 mb-4 flex h-8 items-center gap-2 rounded-md border px-2 text-sm shadow-[var(--shadow-sm)] transition-colors"
         >
           <Search className="size-4" strokeWidth={1.5} /> Search
@@ -151,6 +166,7 @@ function Shell() {
             <Link
               key={n.to}
               to={n.to}
+              onClick={() => setMobileNav(false)}
               data-tour={`nav-${n.to.slice(1) || 'dashboard'}`}
               className={cn(
                 'flex h-8 items-center gap-2.5 rounded-md px-2 text-sm transition-colors',
@@ -206,6 +222,14 @@ function Shell() {
                 <ShieldCheck className="size-4" /> Two-factor authentication
                 {user?.authSource === 'local' && !user.totpEnrolled && <span className="text-muted-foreground ml-auto text-xs">off</span>}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSecurity('password')}>
+                <Lock className="size-4" /> Password and sessions
+              </DropdownMenuItem>
+              {user?.authSource === 'local' && (
+                <DropdownMenuItem onClick={() => setSecurity('passkeys')}>
+                  <Fingerprint className="size-4" /> Passkeys
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={tour.start}>
                 <RouteIcon className="size-4" /> Guided tour
               </DropdownMenuItem>
@@ -216,19 +240,28 @@ function Shell() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </aside>
+    </>
+  );
+
+  return (
+    <div className="flex h-dvh overflow-hidden">
+      <aside className="bg-sidebar hidden w-60 shrink-0 flex-col border-r md:flex">{sidebar(false)}</aside>
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-12 shrink-0 items-center gap-3 border-b px-6 md:hidden">
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b px-4 md:hidden">
+          <Button size="icon" variant="ghost" aria-label="Open menu" onClick={() => setMobileNav(true)}>
+            <Menu />
+          </Button>
           <span className="font-medium">mail-gateway</span>
-          <GatewayPill />
-          <div className="ml-auto flex gap-1">
-            {nav.map((n) => (
-              <Link key={n.to} to={n.to} className="text-muted-foreground p-1.5" aria-label={n.label}>
-                <n.icon className="size-4" />
-              </Link>
-            ))}
-          </div>
+          <span className="ml-auto">
+            <GatewayPill />
+          </span>
         </div>
+        <Sheet open={mobileNav} onOpenChange={setMobileNav}>
+          <SheetContent side="left" className="bg-sidebar flex w-72 flex-col gap-0 p-0" aria-describedby={undefined}>
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            {sidebar(true)}
+          </SheetContent>
+        </Sheet>
         <div className="flex min-h-0 flex-1 flex-col overflow-auto">
           <Outlet />
         </div>
@@ -293,6 +326,7 @@ function Shell() {
         </CommandList>
       </CommandDialog>
       <TwoFactorDialog open={twoFactor} onOpenChange={setTwoFactor} />
+      <AccountSecurityDialog tab={security} onClose={() => setSecurity(null)} />
       <PauseDialog open={confirmPause} onOpenChange={setConfirmPause} onConfirm={(r) => pause.mutateAsync(r || 'manual (admin UI)')} />
     </div>
   );

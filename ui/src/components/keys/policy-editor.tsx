@@ -11,7 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { fmtBytes } from '@/lib/format';
-import { policySchema, type PolicyForm } from '@/lib/schemas';
+import { HOST_RE, MIME_RE, isIpRule, policySchema, type PolicyForm } from '@/lib/schemas';
+import { cn } from '@/lib/utils';
+import { ChipsInput } from './chips-input';
 import { RecipientChipsInput } from './recipient-chips';
 import { Segmented } from './segmented';
 
@@ -30,7 +32,24 @@ export function toForm(k: KeyPolicy): PolicyForm {
     attachmentsAllowed: k.attachmentsAllowed,
     maxAttachmentBytes: k.maxAttachmentBytes,
     liveProvider: k.liveProvider ?? 'default',
+    allowedIps: k.allowedIps ?? [],
+    expiresAt: k.expiresAt ? toLocalInput(k.expiresAt) : '',
+    allowedLinkDomains: k.allowedLinkDomains ?? [],
+    maxLinks: k.maxLinks ?? null,
+    blockSecrets: k.blockSecrets ?? true,
+    allowedAttachmentTypes: k.allowedAttachmentTypes ?? [],
+    scanAttachments: k.scanAttachments ?? false,
+    templatesOnly: k.templatesOnly ?? false,
+    allowedTemplates: k.allowedTemplates ?? [],
+    warmup: k.warmup ?? true,
   };
+}
+
+/** ISO → value for <input type="datetime-local"> in the browser's time zone. */
+function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /** Only the fields that changed, in API shape. */
@@ -40,10 +59,15 @@ export function diffPolicy(before: PolicyForm, after: PolicyForm): UpdateKey {
     if (JSON.stringify(before[k]) === JSON.stringify(after[k])) continue;
     if (k === 'liveProvider') patch.liveProvider = after.liveProvider === 'default' ? null : after.liveProvider;
     else if (k === 'fromName') patch.fromName = after.fromName || null;
+    else if (k === 'expiresAt') patch.expiresAt = after.expiresAt ? new Date(after.expiresAt).toISOString() : null;
     else patch[k] = after[k];
   }
   return patch as UpdateKey;
 }
+
+const ipProblem = (v: string) => (isIpRule(v) ? null : 'use an IP address or a CIDR range like 10.0.0.0/24');
+const hostProblem = (v: string) => (HOST_RE.test(v) ? null : 'use a domain like example.com (subdomains are included)');
+const mimeProblem = (v: string) => (MIME_RE.test(v) ? null : 'use a MIME type like application/pdf or image/*');
 
 
 const MODE_HINT: Record<PolicyForm['mode'], string> = {
@@ -83,11 +107,15 @@ interface Props {
   canPromote?: boolean;
   onSave: (patch: UpdateKey) => Promise<unknown>;
   providers?: { smtp: boolean; resend: boolean };
+  /** template names to choose from (undefined when the user cannot list them) */
+  templates?: string[];
+  /** ClamAV address when configured */
+  clamav?: string | null;
 }
 
 const num = { setValueAs: (v: string) => (v === '' ? undefined : Number(v)) };
 
-export function PolicyEditor({ policy, readOnly, onSave, providers, canUpdate = true, canPromote = true }: Props) {
+export function PolicyEditor({ policy, readOnly, onSave, providers, templates, clamav, canUpdate = true, canPromote = true }: Props) {
   const initial = toForm(policy);
   const form = useForm<PolicyForm>({ resolver: zodResolver(policySchema), defaultValues: initial, mode: 'onBlur' });
   const { register, control, handleSubmit, watch, reset, formState } = form;
@@ -187,11 +215,33 @@ export function PolicyEditor({ policy, readOnly, onSave, providers, canUpdate = 
           <p className="text-muted-foreground text-xs leading-4">Every to/cc/bcc address must match one entry. &quot;@example.com&quot; matches that exact domain only.</p>
         </Section>
 
+        <Section title="Access">
+          <div className="sm:col-span-2">
+            <Field label="Allowed source IPs" htmlFor="allowedIps" hint="Requests from other addresses are refused (IP_NOT_ALLOWED). Empty = any">
+              <Controller
+                control={control}
+                name="allowedIps"
+                render={({ field }) => (
+                  <ChipsInput id="allowedIps" label="Add allowed IP" placeholder="10.0.0.0/24 or 2001:db8::/32" value={field.value} onChange={field.onChange} validate={ipProblem} disabled={readOnly || !canUpdate} />
+                )}
+              />
+            </Field>
+          </div>
+          <Field label="Expires" htmlFor="expiresAt" hint={watch('expiresAt') ? 'The key stops working at this time (your time zone)' : 'Never'}>
+            <Input id="expiresAt" type="datetime-local" {...register('expiresAt')} />
+          </Field>
+        </Section>
+
         <Section title="Limits">
           <Field label="Quota per hour" htmlFor="quotaPerHour" error={e.quotaPerHour?.message} hint="Messages per UTC hour">
             <Input id="quotaPerHour" type="number" min={0} {...register('quotaPerHour', num)} />
           </Field>
-          <Field label="Quota per day" htmlFor="quotaPerDay" error={e.quotaPerDay?.message} hint="Messages per UTC day">
+          <Field
+            label="Quota per day"
+            htmlFor="quotaPerDay"
+            error={e.quotaPerDay?.message}
+            hint={policy.warmupState ? `Warming up: day ${policy.warmupState.day} of ${policy.warmupState.days}, capped at ${policy.warmupState.dailyCap} today` : 'Messages per UTC day'}
+          >
             <Input id="quotaPerDay" type="number" min={0} {...register('quotaPerDay', num)} />
           </Field>
           <Field label="Max recipients per message" htmlFor="maxRecipientsPerMessage" error={e.maxRecipientsPerMessage?.message} hint="to + cc + bcc">
@@ -218,6 +268,90 @@ export function PolicyEditor({ policy, readOnly, onSave, providers, canUpdate = 
               <Input id="maxAttachmentBytes" type="number" min={0} {...register('maxAttachmentBytes', num)} />
             </Field>
           )}
+          <ToggleCard title="Warm-up" description="Ramp the daily volume up over the first days out of sandbox">
+            <Controller control={control} name="warmup" render={({ field }) => <Switch aria-label="Warm-up" checked={field.value} onCheckedChange={field.onChange} />} />
+          </ToggleCard>
+        </Section>
+
+        <Section title="Content">
+          <div className="sm:col-span-2">
+            <Field label="Allowed link domains" htmlFor="allowedLinkDomains" hint="Links in the body must point here; subdomains included. Empty = any">
+              <Controller
+                control={control}
+                name="allowedLinkDomains"
+                render={({ field }) => (
+                  <ChipsInput id="allowedLinkDomains" label="Add link domain" placeholder="example.com" value={field.value} onChange={field.onChange} validate={hostProblem} disabled={readOnly || !canUpdate} />
+                )}
+              />
+            </Field>
+          </div>
+          <Field label="Max links per message" htmlFor="maxLinks" error={e.maxLinks?.message} hint="Empty = unlimited">
+            <Input id="maxLinks" type="number" min={0} placeholder="Unlimited" {...register('maxLinks', { setValueAs: (v: string) => (v === '' || v === null ? null : Number(v)) })} />
+          </Field>
+          <ToggleCard title="Block secrets" description="Refuse credentials, private keys, card and bank numbers">
+            <Controller control={control} name="blockSecrets" render={({ field }) => <Switch aria-label="Block secrets" checked={field.value} onCheckedChange={field.onChange} />} />
+          </ToggleCard>
+          {watch('attachmentsAllowed') && (
+            <>
+              <div className="sm:col-span-2">
+                <Field label="Allowed attachment types" htmlFor="allowedAttachmentTypes" hint="Content is checked against the type; executables are always refused. Empty = any">
+                  <Controller
+                    control={control}
+                    name="allowedAttachmentTypes"
+                    render={({ field }) => (
+                      <ChipsInput
+                        id="allowedAttachmentTypes"
+                        label="Add attachment type"
+                        placeholder="application/pdf, image/*"
+                        value={field.value}
+                        onChange={field.onChange}
+                        validate={mimeProblem}
+                        disabled={readOnly || !canUpdate}
+                      />
+                    )}
+                  />
+                </Field>
+              </div>
+              <ToggleCard title="Virus scan" description={clamav ? `Scanned by ClamAV (${clamav})` : 'Needs CLAMAV_HOST on the gateway; attachments are refused without it'}>
+                <Controller control={control} name="scanAttachments" render={({ field }) => <Switch aria-label="Virus scan" checked={field.value} onCheckedChange={field.onChange} />} />
+              </ToggleCard>
+            </>
+          )}
+        </Section>
+
+        <Section title="Templates">
+          <ToggleCard title="Templates only" description="Refuse free-form subject and body; clients send a template and its variables">
+            <Controller control={control} name="templatesOnly" render={({ field }) => <Switch aria-label="Templates only" checked={field.value} onCheckedChange={field.onChange} />} />
+          </ToggleCard>
+          <Field label="Allowed templates" hint={templates ? 'None selected = any template' : 'Needs templates:read to list them'}>
+            <Controller
+              control={control}
+              name="allowedTemplates"
+              render={({ field }) => (
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Allowed templates">
+                  {[...new Set([...(templates ?? []), ...field.value])].map((name) => {
+                    const on = field.value.includes(name);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        aria-pressed={on}
+                        disabled={readOnly || !canUpdate}
+                        onClick={() => field.onChange(on ? field.value.filter((x) => x !== name) : [...field.value, name])}
+                        className={cn(
+                          'h-7 rounded-md border px-2 font-mono text-xs transition-colors',
+                          on ? 'bg-card border-input text-foreground shadow-[var(--shadow-sm)]' : 'text-secondary-foreground hover:text-foreground border-dashed',
+                        )}
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                  {!templates?.length && !field.value.length && <span className="text-muted-foreground text-sm">No templates yet</span>}
+                </div>
+              )}
+            />
+          </Field>
         </Section>
         </fieldset>
       </fieldset>

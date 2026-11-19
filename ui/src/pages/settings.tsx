@@ -19,11 +19,11 @@ export function SettingsPage() {
     <>
       <PageHeader title="Settings" description="Effective configuration, read-only. Change it through environment variables; secrets are never shown" />
       {!s ? (
-        <div className="px-8 py-6">
+        <div className="px-4 sm:px-8 py-6">
           <Skeleton className="h-48 w-full" />
         </div>
       ) : (
-        <div className="grid w-full max-w-[1440px] gap-4 px-8 py-6 lg:grid-cols-2">
+        <div className="grid w-full max-w-[1440px] gap-4 px-4 sm:px-8 py-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>Live delivery</CardTitle>
@@ -115,6 +115,48 @@ export function SettingsPage() {
                         ['Group → role mapping', <span className="text-xs">configured per role on the Roles page</span>],
                       ] as Array<[string, React.ReactNode]>)
                     : []),
+                ]}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Volume and reputation</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <KV
+                items={[
+                  [
+                    'Per-domain caps',
+                    s.recipientDomainLimits.length ? (
+                      <span className="font-mono text-xs">{s.recipientDomainLimits.map((d) => `${d.domain} ${d.perHour}/h`).join(' · ')}</span>
+                    ) : (
+                      'none'
+                    ),
+                  ],
+                  ['Warm-up', s.warmupSchedule.length ? <span className="font-mono text-xs">{s.warmupSchedule.join(' → ')} per day</span> : 'off'],
+                  ['Sender domain checks', <span className="font-mono text-xs">{s.senderDomainChecks}</span>],
+                ]}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Content and records</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <KV
+                items={[
+                  ['Virus scanner', s.clamav ? <span className="font-mono text-xs">{s.clamav}</span> : 'not configured'],
+                  ['Bodies at rest', s.bodiesEncrypted ? 'encrypted (AES-256-GCM)' : <span className="text-warning-foreground">not encrypted: set APP_ENCRYPTION_KEY</span>],
+                  ['Activity log chain', s.auditChainKeyed ? 'HMAC-signed' : 'SHA-256 (set APP_ENCRYPTION_KEY to sign)'],
+                  [
+                    'Alert rules',
+                    <span className="text-xs">
+                      {s.alertRules.rejectionSpike} rejections or {s.alertRules.failureSpike} failures in {s.alertRules.spikeWindowMinutes} min · quota at {s.alertRules.quotaPercent}% · approvals waiting{' '}
+                      {s.alertRules.approvalWaitMinutes} min · keys expiring in {s.alertRules.keyExpiryDays} days · repeated at most every {s.alertRules.cooldownMinutes} min
+                    </span>,
+                  ],
                 ]}
               />
             </CardContent>

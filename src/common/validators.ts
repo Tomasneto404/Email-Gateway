@@ -56,6 +56,27 @@ export function IsPlainEmail(options?: ValidationOptions) {
     });
 }
 
+/** Array-of-strings validator with a predicate per element. */
+export function EachMatches(name: string, test: (v: string) => boolean, message: string) {
+  return (object: object, propertyName: string) =>
+    registerDecorator({
+      name,
+      target: object.constructor,
+      propertyName,
+      options: { message: `${propertyName} ${message}` },
+      validator: {
+        validate(value: unknown) {
+          if (value === undefined) return true;
+          return Array.isArray(value) && value.every((v) => typeof v === 'string' && test(v));
+        },
+      },
+    });
+}
+
+export const HOST_RE = /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+export const MIME_PATTERN_RE = /^[\w.+-]+\/(?:\*|[\w.+-]+)$/;
+export const NAME_RE = /^[A-Za-z0-9._-]{2,64}$/;
+
 export function IsRecipientRule(options?: ValidationOptions) {
   return (object: object, propertyName: string) =>
     registerDecorator({

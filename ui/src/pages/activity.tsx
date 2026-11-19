@@ -1,12 +1,13 @@
 // Authored by Tomás Neto (TN 2026)
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { useAudit, useKeyLookup, useUsersLookup, type AuditParams } from '@/api/queries';
+import { useAudit, useKeyLookup, useUsersLookup, useVerifyAudit, type AuditParams } from '@/api/queries';
 import { ExportMenu } from '@/components/common/export-menu';
 import { useMe } from '@/lib/auth';
-import { X } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import type { Schemas } from '@/api/client';
 import { Pill, Signal } from '@/components/common/badges';
-import { PageHeader } from '@/components/common/page';
+import { Callout, PageHeader } from '@/components/common/page';
+import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/data-table/data-table';
 import { Input } from '@/components/ui/input';
 import { fmtTime } from '@/lib/format';
@@ -62,6 +63,7 @@ export function ActivityPage() {
   const navigate = useNavigate();
   const q: AuditParams = { page: 1, pageSize: 50, order: 'desc', ...search };
   const { data, isLoading } = useAudit(q);
+  const verify = useVerifyAudit();
   const set = (patch: Partial<AuditParams>) => navigate({ to: '/activity', search: { ...search, page: 1, ...patch } as never, replace: true });
   const sel = 'border-input h-8 rounded-md border bg-transparent px-2 text-sm';
   return (
@@ -70,13 +72,38 @@ export function ActivityPage() {
         title="Activity log"
         description="Every administrative action and sign-in attempt"
         actions={
-          <ExportMenu
-            path="/admin/audit/export.csv"
-            params={{ action: search.action, actor: search.actor, actorType: search.actorType, outcome: search.outcome, actorId: search.actorId, keyId: search.keyId }}
-          />
+          <>
+            <Button variant="outline" onClick={() => verify.mutate()} disabled={verify.isPending}>
+              <ShieldCheck /> Verify integrity
+            </Button>
+            <ExportMenu
+              path="/admin/audit/export.csv"
+              params={{ action: search.action, actor: search.actor, actorType: search.actorType, outcome: search.outcome, actorId: search.actorId, keyId: search.keyId }}
+            />
+          </>
         }
       />
-      <div className="flex flex-wrap items-center gap-2 border-b px-8 py-3">
+      {verify.data && (
+        <div className="border-b px-4 sm:px-8 py-3" data-testid="audit-verify">
+          {verify.data.ok ? (
+            <Callout tone="ok" icon={<ShieldCheck />}>
+              <span className="font-medium">Chain intact.</span>{' '}
+              <span className="text-secondary-foreground">
+                {verify.data.checked.toLocaleString()} rows verified{verify.data.anchorSeq ? ` since retention row ${verify.data.anchorSeq}` : ''}. Head{' '}
+                <span className="font-mono text-xs">
+                  #{verify.data.headSeq} {verify.data.headHash?.slice(0, 22)}…
+                </span>{' '}
+                (record it elsewhere to also detect removal of the newest rows).
+              </span>
+            </Callout>
+          ) : (
+            <Callout tone="warn" icon={<ShieldAlert />}>
+              <span className="font-medium">Integrity check failed at row #{verify.data.brokenAtSeq}.</span> <span className="text-secondary-foreground">{verify.data.reason}. An alert was raised.</span>
+            </Callout>
+          )}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2 border-b px-4 sm:px-8 py-3">
         <select aria-label="Action" className={sel} value={search.action ?? ''} onChange={(e) => set({ action: e.target.value || undefined })}>
           <option value="">All actions</option>
           {data?.actions.map((a) => (

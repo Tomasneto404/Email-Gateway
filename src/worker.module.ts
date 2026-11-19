@@ -1,6 +1,8 @@
 // Authored by Tomás Neto (TN 2026)
 import { DynamicModule, Inject, Injectable, Module, OnApplicationBootstrap } from '@nestjs/common';
+import { AlertsWorker } from './alerts/alerts.worker';
 import { CoreModule, CoreOptions } from './core.module';
+import { QuotaService } from './policy/quota.service';
 import { GatewayStateService } from './gateway-state/gateway-state.service';
 import { WorkerGauges } from './metrics/gauges';
 import { OpsServer } from './metrics/ops-server';
@@ -27,7 +29,7 @@ class QueueStateSync implements OnApplicationBootstrap {
 
 @Module({})
 export class WorkerModule {
-  static forRoot(opts: CoreOptions & { opsServer?: boolean; retention?: boolean }): DynamicModule {
+  static forRoot(opts: CoreOptions & { opsServer?: boolean; retention?: boolean; alerts?: boolean }): DynamicModule {
     return {
       module: WorkerModule,
       imports: [CoreModule.forRoot(opts)],
@@ -37,6 +39,8 @@ export class WorkerModule {
         CircuitBreakerService,
         DeliveryWorker,
         SystemMailWorker,
+        QuotaService,
+        ...(opts.alerts === false ? [] : [AlertsWorker]),
         ...(opts.retention === false ? [] : [RetentionService]),
         ...(opts.opsServer === false ? [] : [OpsServer, WorkerGauges]),
       ],

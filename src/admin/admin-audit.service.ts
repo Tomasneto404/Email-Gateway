@@ -1,8 +1,8 @@
 // Authored by Tomás Neto (TN 2026)
 import { Injectable } from '@nestjs/common';
 import { EventLogger } from '../common/event-logger';
-import { PrismaService } from '../common/prisma.service';
 import { Prisma } from '../generated/prisma/client';
+import { AuditChainService } from './audit-chain.service';
 
 export type ActorType = 'user' | 'token' | 'cli' | 'system';
 export interface Actor {
@@ -26,28 +26,29 @@ export interface AuditEntry {
   outcome?: 'success' | 'failure';
 }
 
-/** Writes every admin action to `admin_audit` and emits a structured `admin_action` event. */
+/**
+ * Writes every admin action to `admin_audit` (appended to the tamper-evident hash chain) and emits a
+ * structured `admin_action` event.
+ */
 @Injectable()
 export class AdminAuditService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly chain: AuditChainService,
     private readonly events: EventLogger,
   ) {}
 
   async record(actor: Actor, entry: AuditEntry): Promise<void> {
     const outcome = entry.outcome ?? 'success';
-    await this.prisma.adminAudit.create({
-      data: {
-        actorType: actor.type,
-        actorId: actor.id ?? null,
-        actorLabel: actor.label,
-        action: entry.action,
-        targetType: entry.targetType ?? null,
-        targetId: entry.targetId ?? null,
-        details: (entry.details ?? undefined) as Prisma.InputJsonValue | undefined,
-        ip: actor.ip ?? null,
-        outcome,
-      },
+    await this.chain.append({
+      actorType: actor.type,
+      actorId: actor.id ?? null,
+      actorLabel: actor.label,
+      action: entry.action,
+      targetType: entry.targetType ?? null,
+      targetId: entry.targetId ?? null,
+      details: (entry.details ?? undefined) as Prisma.InputJsonValue | undefined,
+      ip: actor.ip ?? null,
+      outcome,
     });
     this.events.emit('admin_action', {
       action: entry.action,

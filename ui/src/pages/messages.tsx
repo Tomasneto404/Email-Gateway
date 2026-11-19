@@ -74,7 +74,7 @@ export function MessagesPage() {
           />
         }
       />
-      <div className="flex flex-wrap items-center gap-2 border-b px-8 py-3" data-tour="filters">
+      <div className="flex flex-wrap items-center gap-2 border-b px-4 sm:px-8 py-3" data-tour="filters">
         <Input placeholder="Subject" className="h-8 w-52" defaultValue={filters.subject} onChange={(e) => set({ subject: e.target.value || undefined })} />
         <Input placeholder="Recipient (exact)" className="h-8 w-52" defaultValue={filters.recipient} onBlur={(e) => set({ recipient: e.target.value.trim() || undefined })} />
         <select

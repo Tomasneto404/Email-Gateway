@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import { EventLogger } from '../common/event-logger';
 import { GatewayError } from '../common/errors';
 import { bearerToken, clientIp } from '../common/http';
+import { ipAllowed } from '../common/ip';
 import { ApiKey } from '../generated/prisma/client';
 import { AuthLimiterService } from './auth-limiter.service';
 import { KeysService } from './keys.service';
@@ -44,6 +45,17 @@ export class ApiKeyGuard implements CanActivate {
           ? 'The API key is invalid or has been rotated/deleted. Send a valid key as "Authorization: Bearer mk_...".'
           : 'Missing API key. Send "Authorization: Bearer mk_..." with every request.',
       );
+    }
+    if (key.expiresAt && key.expiresAt.getTime() <= Date.now()) {
+      this.events.emit('key_expired', { keyName: key.name, keyId: key.id, ip, outcome: 'rejected', reason: 'KEY_EXPIRED' });
+      throw new GatewayError('KEY_EXPIRED', `API key "${key.name}" expired at ${key.expiresAt.toISOString()}. Ask an administrator for a new key; do not retry.`);
+    }
+    if (!ipAllowed(ip, key.allowedIps)) {
+      this.events.emit('ip_not_allowed', { keyName: key.name, keyId: key.id, ip, outcome: 'rejected', reason: 'IP_NOT_ALLOWED' });
+      throw new GatewayError('IP_NOT_ALLOWED', `API key "${key.name}" cannot be used from ${ip}. Its allowed sources are restricted by an administrator.`, { ip });
+    }
+    if (key.viaPrevious) {
+      this.events.emit('previous_key_used', { keyName: key.name, keyId: key.id, ip, outcome: 'info', validUntil: key.prevKeyExpiresAt?.toISOString() });
     }
     req.apiKey = key;
     return true;

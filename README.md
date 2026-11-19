@@ -23,8 +23,13 @@ The guardrails are the product:
 | Dedup | Identical message (key + recipients + subject + body) within 10 min → `DUPLICATE_MESSAGE`. Catches agent loops |
 | Idempotency | Same `Idempotency-Key` within 24 h returns the original message |
 | Circuit breaker | Repeated provider failures automatically pause the whole gateway |
+| Content guardrails | Allowed link domains, max links, secrets in bodies (keys, tokens, card/bank numbers), attachment types checked against their content, optional ClamAV |
+| Templates | Keys can be limited to server-side templates: clients send variables, not content |
+| Reputation limits | Per destination-domain hourly caps across keys, warm-up of new live keys, optional SPF/DKIM/DMARC checks before going live |
+| Key access | Source IP allow-lists, expiry dates, rotation with a grace period |
+| Alerts | Webhook / Slack / email on breaker trips, pauses, rejection or failure spikes, quotas, waiting approvals, expiring keys and a broken audit chain |
 | Kill switches | Disable a single key, or pause the whole gateway |
-| Audit log | Every request after authentication (accepted or rejected), with full body (retention-limited), transitions and provider responses |
+| Audit log | Every request after authentication (accepted or rejected), with full body (encrypted at rest, retention-limited), transitions and provider responses. Admin actions go to a tamper-evident hash chain |
 
 ---
 
@@ -69,6 +74,7 @@ Open <http://localhost:3000/ui>. Mailpit, the sandbox inbox, is at <http://local
   |---|---|
   | `./secrets` | Generated on the first start: database password, encryption key and the first admin's password (`./secrets/admin_password`) |
   | `./data/postgres`, `./data/redis`, `./data/mailpit` | The database, the queue/quotas and the sandbox inbox |
+  | `./backups` | Scheduled database dumps |
 
   Back these folders up together. The secrets encrypt data in the database.
 - **First administrator:** `admin@example.com` unless you set `MG_ADMIN_EMAIL`. Migrations run before the API starts.
@@ -77,6 +83,10 @@ Open <http://localhost:3000/ui>. Mailpit, the sandbox inbox, is at <http://local
   - For a private registry, set `MG_IMAGE=registry.example.com/infra/mail-gateway` after `docker login`.
   - To pin a version, set `MG_TAG=1.0.3`. To update, run `docker compose pull && docker compose up -d`.
 - **Network:** ports are published on `127.0.0.1` only (`MG_BIND`, `MG_HTTP_PORT`, `MG_MAILPIT_PORT`). Before exposing the gateway, put it behind HTTPS and set `COOKIE_SECURE=true` and `PUBLIC_URL`.
+- **Backups:** the `backup` service writes a `pg_dump` to `./backups` every `MG_BACKUP_INTERVAL_HOURS` (24; 0 = off) and keeps `MG_BACKUP_KEEP_DAYS` (14). Keep `./secrets` with them: bodies are encrypted with the key stored there. Restore:
+  ```bash
+  docker compose exec -T backup sh -c 'PGPASSWORD=$(cat /run/mg/postgres_password) pg_restore --clean --if-exists -d mailgw' < backups/mailgw-<date>.dump
+  ```
 - **Starting over:** `docker compose down`, then `sudo rm -rf data secrets`. The data folders belong to the containers' users, hence `sudo`.
 
 ## Quickstart (from source)
@@ -173,8 +183,34 @@ docker compose exec api node dist/cli.js keys:update --name report-agent --mode 
 | `attachmentsAllowed` | `false` | |
 | `maxAttachmentBytes` | 5 MB | Decoded total |
 | `liveProvider` | `null` | `smtp` \| `resend` \| `null` (use `LIVE_PROVIDER`) |
+| `allowedIps` | `[]` | Source IPs / CIDR ranges allowed to use the key (`IP_NOT_ALLOWED`). Empty = any |
+| `expiresAt` | `null` | The key stops working after this instant (`KEY_EXPIRED`); an alert goes out `ALERT_KEY_EXPIRY_DAYS` before |
+| `allowedLinkDomains` | `[]` | Domains links in the body may point to, subdomains included (`LINK_NOT_ALLOWED`). Empty = any |
+| `maxLinks` | `null` | Max distinct links per message (`TOO_MANY_LINKS`). `null` = unlimited |
+| `blockSecrets` | `true` | Refuses bodies with cloud/API keys, tokens, private keys, passwords in URLs, card numbers (Luhn) and IBANs (`CONTENT_BLOCKED`) |
+| `allowedAttachmentTypes` | `[]` | MIME types (`image/*` wildcards). The content is checked against the declared type. Executables and scripts are always refused (`ATTACHMENT_TYPE_NOT_ALLOWED`) |
+| `scanAttachments` | `false` | ClamAV scan (`CLAMAV_HOST`), fail-closed (`ATTACHMENT_INFECTED`, `ATTACHMENT_SCAN_UNAVAILABLE`) |
+| `templatesOnly` | `false` | Only server-side templates may be sent (`TEMPLATE_REQUIRED`) |
+| `allowedTemplates` | `[]` | Template names the key may use (`TEMPLATE_NOT_ALLOWED`). Empty = any |
+| `warmup` | `true` | After the key first leaves sandbox, the daily quota is capped by `WARMUP_SCHEDULE` (day 1, 2, …) |
+
+Gateway-wide: `RECIPIENT_DOMAIN_LIMITS` caps recipients per destination domain per hour across all keys for live/approval mail (`DOMAIN_RATE_LIMITED`). `SENDER_DOMAIN_CHECKS=warn|enforce` checks SPF, DMARC and DKIM of each key's sender domain; `enforce` refuses to take a key out of sandbox while SPF or DMARC fail (`DOMAIN_NOT_VERIFIED`).
+
+Rotation can keep the previous secret valid for a grace period (`POST /admin/keys/{id}/rotate {"graceMinutes": 60}`, or `keys:rotate --grace-minutes 60`), so clients switch without downtime; `/v1/me` tells them until when (`previousSecretValidUntil`).
 
 Each outgoing message carries `X-Mail-Gateway-Key: <key name>` and `X-Mail-Gateway-Message-Id: <id>`.
+
+### Templates
+
+Server-side templates keep the content in the gateway; clients (agents in particular) only fill values. Variables are written `{{name}}`, every one is required, unknown ones are refused, values are HTML-escaped in the HTML body and may not contain line breaks in the subject.
+
+```bash
+curl -s localhost:3000/v1/templates -H "Authorization: Bearer $KEY"     # what this key may send, with the variables
+curl -s localhost:3000/v1/send -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+  -d '{"to":"ana@example.com","template":"password-reset","variables":{"name":"Ana","link":"https://app.example.com/r/abc","minutes":30}}'
+```
+
+Templates are managed on the **Templates** page (`templates:read` / `templates:manage`), with a preview. A key with `templatesOnly` can only send templates, which removes free-form content (and prompt-injected text) from what it can emit.
 
 ### Send request (`POST /v1/send`)
 
@@ -243,12 +279,14 @@ The gateway's state is always in view as a **signal light** at the top of the si
 | Screen | What you can do |
 |---|---|
 | **Dashboard** | Gateway state, breaker state per provider, relay health and pause/resume. Traffic chart with delivered mail above the axis and policy rejections below it, accepted/delivered/rejected/failed counts, pending approvals, top keys and rejections by reason |
-| **API keys** | List with today's/hour's usage against quota. Create wizard that shows the secret once. Key page with policy editor (mode with a live-promotion warning, sender, recipient chips, quotas, limits, attachments, provider), 24 h usage chart, recent messages, rotate, enable/disable, delete and **Send test email** |
+| **API keys** | List with today's/hour's usage against quota. Create wizard that shows the secret once. Key page with policy editor (mode with a live-promotion warning, sender, recipient chips, source IPs and expiry, quotas and warm-up, attachments, link domains and secret blocking, templates, provider), sender-domain check, 24 h usage chart, recent messages, rotate (with a grace period), enable/disable, delete and **Send test email** |
 | **Messages** | Search by status, key, recipient, subject and date range. Detail drawer with the message's route (received → queued → delivered / failed, or stopped by policy), metadata, status timeline, attempts, provider response, headers and text body. The HTML body is shown in a sandboxed iframe |
 | **Approvals** | Inbox of `pending_approval` messages with preview, approve/reject (with reason) and bulk actions |
 | **Admin users** | Invite a user with roles (one-time link), edit roles, reset 2FA, reset password, disable, delete |
 | **Roles** | RBAC: create/edit roles as sets of permissions, map Authentik groups to roles |
-| **Activity log** | The `admin_audit` table, filterable by action, actor and outcome, and scoped per user or per API key |
+| **Templates** | Server-side templates with `{{variables}}`, preview with sample values, which keys allow each one |
+| **Alerts** | Channels (HMAC-signed webhook, Slack, email) with per-type subscriptions and a test button; alert history |
+| **Activity log** | The `admin_audit` table, filterable by action, actor and outcome, and scoped per user or per API key. **Verify integrity** checks the hash chain |
 | **Settings** | Effective configuration, read-only and without secrets. Includes the Mailpit link in dev |
 
 <table>
@@ -268,6 +306,22 @@ The gateway's state is always in view as a **signal light** at the top of the si
     <td><sub><b>Approvals</b>: mail from approval-mode keys waits for a human</sub></td>
     <td><sub><b>Roles</b>: permissions per role, Authentik groups mapped onto roles</sub></td>
   </tr>
+  <tr>
+    <td><img src="docs/images/templates.png" alt="Templates page with three templates; the password-reset editor shows its variables, which keys allow it, and a rendered preview of the HTML and text bodies with sample values"></td>
+    <td><img src="docs/images/alerts-dark.png" alt="Alerts in dark theme: a webhook and a Slack channel with test buttons, and the recent alerts (approvals waiting, quota threshold, rejection spike, pause and resume, key expiring) with the channels each reached"></td>
+  </tr>
+  <tr>
+    <td><sub><b>Templates</b>: <code>{{variables}}</code>, the keys that may send each one, and a preview with sample values</sub></td>
+    <td><sub><b>Alerts</b>: where breaker trips, spikes, quotas and expiring keys are sent, and what was sent</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/key-guardrails.png" alt="Key policy, lower half: warm-up switch, allowed link domains, max links per message, block secrets, templates-only switch and the allowed templates"></td>
+    <td><img src="docs/images/activity-verify.png" alt="Activity log after Verify integrity: chain intact, 26 rows verified, with the head hash, above the list of template, alert channel and key policy changes"></td>
+  </tr>
+  <tr>
+    <td><sub><b>Content guardrails</b>: link domains, secret blocking, templates-only keys and warm-up</sub></td>
+    <td><sub><b>Activity log</b>: the hash chain checked from the UI</sub></td>
+  </tr>
 </table>
 
 <sub>Screenshots use demo data on `example.com` domains.</sub>
@@ -282,7 +336,16 @@ Details:
 - Cells that could run as spreadsheet formulas are neutralised (CSV injection).
 - Exports need `messages:read` / `audit:read`, stream in batches, are capped at `EXPORT_MAX_ROWS`, and are themselves recorded in the activity log.
 
-Keyboard: `⌘K` / `Ctrl+K` opens the command palette, and `g d`, `g k`, `g m`, `g a`, `g u`, `g l`, `g s` jump between screens. Light, dark and system themes are available.
+Keyboard: `⌘K` / `Ctrl+K` opens the command palette, and `g d`, `g k`, `g m`, `g a`, `g u`, `g r`, `g t`, `g n`, `g l`, `g s` jump between screens. Light, dark and system themes are available.
+
+**On a phone** the sidebar folds into a menu button, stat tiles stack two per row and tables scroll sideways, so approving a held message or pausing the gateway works from anywhere.
+
+<table>
+  <tr>
+    <td width="30%"><img src="docs/images/mobile-dashboard.png" alt="Dashboard on a phone: gateway state with the pause button, then the stat tiles two per row"></td>
+    <td width="30%"><img src="docs/images/mobile-menu.png" alt="Phone navigation drawer with search, every screen, the approvals count and the account"></td>
+  </tr>
+</table>
 
 <img src="docs/images/guided-tour.png" alt="Guided tour on the dashboard: the traffic chart is spotlighted and a card explains it, step 4 of 12" width="100%">
 
@@ -301,6 +364,10 @@ Confirmations:
     Once on, the code is required at every sign-in, and turning it off requires the current password.
   - Set `TOTP_REQUIRED=true` to make TOTP mandatory for every local user: it is set up at first sign-in and can't be disabled.
   - TOTP secrets are encrypted with AES-256-GCM using `APP_ENCRYPTION_KEY`, and a TOTP code can't be reused.
+  - **Passkeys** (WebAuthn: platform passkeys or security keys) can be added from the account menu and work as the second factor instead of a TOTP code. They need HTTPS or `localhost`; the relying party is `PUBLIC_URL`'s host.
+  - From the account menu each user can also **change their password** (their other sessions are signed out) and **see and sign out their sessions**.
+
+    <img src="docs/images/account-sessions.png" alt="Account security dialog in dark theme, Sessions tab: the current Chrome session and two Safari sessions with Sign out buttons, and Sign out 2 other sessions" width="70%">
 - **Rate limits.** The account locks after `LOGIN_MAX_FAILURES` failed attempts, and login attempts are also rate-limited per IP.
 - **Sessions.**
   - Server-side sessions use a `__Host-mg_session` cookie: httpOnly, Secure, SameSite=Strict.
@@ -312,7 +379,7 @@ Confirmations:
   Users are created on first login, and their roles are re-synced from their groups at every login. See [docs/authentik.md](docs/authentik.md).
 - **Roles (RBAC).** Each role is a set of permissions, and a user can hold several roles; they get the union of the permissions.
   - Permissions: `dashboard:read`, `keys:read|create|update|promote|rotate|disable|delete|test_send`, `messages:read|bodies`,
-    `approvals:decide`, `gateway:pause`, `users:read|manage`, `roles:manage`, `audit:read`, `settings:read`.
+    `approvals:decide`, `gateway:pause`, `users:read|manage`, `roles:manage`, `templates:read|manage`, `alerts:read|manage`, `audit:read`, `settings:read`.
     A role can also hold `<area>:*` or `*`.
   - Built-in roles:
 
@@ -444,6 +511,9 @@ docker compose -f docker-compose.yml -f compose.secrets.yml up -d
   - A Trivy scan (`trivy image --scanners vuln`) reports 0 known vulnerabilities in both images.
 - Admin UI: argon2id + optional (or enforced, `TOTP_REQUIRED`) TOTP, httpOnly/Secure/SameSite=Strict sessions, CSRF token + Origin check, lockout, a strict CSP and sandboxed email previews. See [Admin UI](#admin-ui-ui).
 - Resend webhooks are verified with Svix signatures, and stale timestamps are rejected.
+- **Data at rest:** message bodies and attachments are encrypted with AES-256-GCM using a key derived from `APP_ENCRYPTION_KEY` (rows written before are still readable; `node dist/cli.js messages:encrypt-bodies` converts them). Subjects and addresses stay searchable in clear. Alert channel URLs and webhook secrets are encrypted too.
+- **Tamper-evident activity log:** each `admin_audit` row stores an HMAC (key derived from `APP_ENCRYPTION_KEY`) over its content and the previous row's hash. **Verify integrity** in the UI, `GET /admin/audit/verify` or `node dist/cli.js audit:verify` (exit code 3 when broken) detects edited, deleted, inserted or reordered rows; the retention job runs the check daily and raises an `audit_chain_broken` alert. Retention moves the chain's anchor instead of breaking it. To also detect removal of the newest rows, record the reported head hash outside the gateway.
+- **Alerts:** webhooks carry `X-Mail-Gateway-Timestamp` and `X-Mail-Gateway-Signature: sha256=HMAC(secret, "<timestamp>.<body>")`; the secret is shown once when the channel is created.
 
 ---
 

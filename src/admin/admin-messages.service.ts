@@ -1,5 +1,6 @@
 // Authored by Tomás Neto (TN 2026)
 import { Injectable } from '@nestjs/common';
+import { BodyCrypto } from '../common/body-crypto';
 import { EventLogger } from '../common/event-logger';
 import { GatewayError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
@@ -20,6 +21,7 @@ export class AdminMessagesService {
     private readonly queues: QueueService,
     private readonly audit: AdminAuditService,
     private readonly events: EventLogger,
+    private readonly crypto: BodyCrypto,
   ) {}
 
   async list(q: MessageQuery) {
@@ -68,7 +70,10 @@ export class AdminMessagesService {
       },
     });
     if (!m) throw new GatewayError('MESSAGE_NOT_FOUND', `Message ${id} not found.`);
-    const { textBody, htmlBody, ...rest } = m;
+    const { textBody: textEnc, htmlBody: htmlEnc, ...rest } = m;
+    // decrypt only for callers allowed to see bodies
+    const textBody = opts.includeBodies ? this.crypto.openText(textEnc) : null;
+    const htmlBody = opts.includeBodies ? this.crypto.openText(htmlEnc) : null;
     return {
       ...rest,
       headers: {
@@ -77,17 +82,54 @@ export class AdminMessagesService {
         ...(m.headerMessageId ? { 'Message-ID': m.headerMessageId } : {}),
       },
       bodiesVisible: opts.includeBodies,
-      textBody: opts.includeBodies ? textBody : null,
-      htmlBody: opts.includeBodies ? htmlBody : null,
-      hasHtml: !!htmlBody,
-      hasText: !!textBody,
+      textBody,
+      htmlBody,
+      hasHtml: !!htmlEnc,
+      hasText: !!textEnc,
     };
   }
 
   async htmlBody(id: string): Promise<string | null> {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new GatewayError('MESSAGE_NOT_FOUND', `Message ${id} not found.`);
     const m = await this.prisma.message.findUnique({ where: { id }, select: { htmlBody: true } });
     if (!m) throw new GatewayError('MESSAGE_NOT_FOUND', `Message ${id} not found.`);
-    return m.htmlBody;
+    return this.crypto.openText(m.htmlBody);
+  }
+
+  /** Encrypts bodies stored before encryption was enabled (CLI messages:encrypt-bodies). */
+  async encryptLegacyBodies(batch = 500): Promise<{ messages: number; attachments: number }> {
+    if (!this.crypto.enabled) throw new GatewayError('INVALID_STATE', 'APP_ENCRYPTION_KEY is not configured.');
+    let messages = 0;
+    let attachments = 0;
+    for (;;) {
+      const rows = await this.prisma.$queryRaw<Array<{ id: string; textBody: string | null; htmlBody: string | null }>>`
+        SELECT id, text_body AS "textBody", html_body AS "htmlBody" FROM messages
+        WHERE (text_body IS NOT NULL AND text_body NOT LIKE 'enc:v1:%') OR (html_body IS NOT NULL AND html_body NOT LIKE 'enc:v1:%')
+        LIMIT ${batch}`;
+      if (!rows.length) break;
+      for (const r of rows) {
+        await this.prisma.message.update({ where: { id: r.id }, data: { textBody: this.crypto.sealText(r.textBody), htmlBody: this.crypto.sealText(r.htmlBody) } });
+        messages += 1;
+      }
+    }
+    let after: string | undefined;
+    for (;;) {
+      const rows = await this.prisma.messageAttachment.findMany({
+        where: { content: { not: null }, ...(after ? { id: { gt: after } } : {}) },
+        orderBy: { id: 'asc' },
+        select: { id: true, content: true },
+        take: 100,
+      });
+      if (!rows.length) break;
+      for (const r of rows) {
+        if (r.content && !BodyCrypto.isSealedBytes(r.content)) {
+          await this.prisma.messageAttachment.update({ where: { id: r.id }, data: { content: new Uint8Array(this.crypto.sealBytes(Buffer.from(r.content))) } });
+          attachments += 1;
+        }
+      }
+      after = rows[rows.length - 1].id;
+    }
+    return { messages, attachments };
   }
 
   async approve(id: string, actor: Actor) {

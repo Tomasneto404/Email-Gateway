@@ -12,6 +12,7 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { IsPlainEmail, NoCrlf } from '../common/validators';
@@ -55,9 +56,21 @@ export class SendDto {
   @IsOptional() @Transform(toLowerArray) @IsArray() @ArrayMaxSize(1000) @IsPlainEmail() @NoCrlf()
   bcc?: string[];
 
-  @ApiProperty({ description: 'Subject line. Required, 1-998 characters, no line breaks.', example: 'Nightly report' })
-  @IsString() @MinLength(1, { message: 'subject must not be empty' }) @MaxLength(998) @NoCrlf()
+  @ApiPropertyOptional({ description: 'Subject line, 1-998 characters, no line breaks. Required unless "template" is used.', example: 'Nightly report' })
+  @ValidateIf((o: SendDto) => !o.template) @IsString() @MinLength(1, { message: 'subject must not be empty' }) @MaxLength(998) @NoCrlf()
   subject!: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Name of a server-side template (GET /v1/templates). Renders subject/text/html from "variables"; do not send subject, text or html with it. Keys with templatesOnly=true must use a template.',
+    example: 'password-reset',
+  })
+  @IsOptional() @IsString() @Matches(/^[A-Za-z0-9._-]{2,64}$/, { message: 'template must be a template name' })
+  template?: string;
+
+  @ApiPropertyOptional({ description: 'Values for the template variables (strings, numbers or booleans). Every variable of the template is required.', type: 'object', additionalProperties: true })
+  @IsOptional() @IsObject()
+  variables?: Record<string, unknown>;
 
   @ApiPropertyOptional({ description: 'Plain-text body. At least one of "text" or "html" is required.' })
   @IsOptional() @IsString()

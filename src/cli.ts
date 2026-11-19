@@ -10,7 +10,9 @@ import { createRootLogger } from './common/logger';
 import { isGatewayError } from './common/errors';
 import { CoreModule, CoreOptions } from './core.module';
 import { GatewayStateService } from './gateway-state/gateway-state.service';
-import { KeysService, toPolicyView } from './keys/keys.service';
+import { KeysService } from './keys/keys.service';
+import { DomainCheckService } from './keys/domain-check.service';
+import { AuditChainService } from './admin/audit-chain.service';
 import { QuotaService } from './policy/quota.service';
 import { SessionsService } from './auth/sessions.service';
 import { RolesService } from './auth/roles.service';
@@ -25,7 +27,7 @@ class CliModule {
     return {
       module: CliModule,
       imports: [CoreModule.forRoot(opts)],
-      providers: [KeysService, QuotaService, AdminMessagesService, SessionsService, UsersService, RolesService, SystemMailService],
+      providers: [KeysService, QuotaService, AdminMessagesService, SessionsService, UsersService, RolesService, SystemMailService, DomainCheckService],
     };
   }
 }
@@ -42,7 +44,7 @@ Keys
   keys:update  --name <n> [same options as create, plus --enabled true|false]
   keys:list
   keys:show    --name <n>
-  keys:rotate  --name <n>
+  keys:rotate  --name <n> [--grace-minutes <n>]   (old secret keeps working that long; default 0)
   keys:enable  --name <n>
   keys:disable --name <n>
   keys:delete  --name <n>
@@ -66,6 +68,10 @@ Admin users (UI)
 Approvals
   messages:approve --id <id>
   messages:reject  --id <id> [--reason <s>]
+
+Security
+  audit:verify              integrity check of the activity log hash chain (exit code 3 when broken)
+  messages:encrypt-bodies   encrypt message bodies stored before APP_ENCRYPTION_KEY was set
 `;
 
 const OPTIONS = {
@@ -89,6 +95,7 @@ const OPTIONS = {
   email: { type: 'string' },
   role: { type: 'string', multiple: true },
   'password-stdin': { type: 'boolean' },
+  'grace-minutes': { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 } as const;
 
@@ -196,13 +203,15 @@ async function main() {
         break;
       }
       case 'keys:show': {
-        out(toPolicyView(await keys.findByName(need(o.name, 'name'))));
+        out(keys.view(await keys.findByName(need(o.name, 'name'))));
         break;
       }
       case 'keys:rotate': {
         const k = await keys.findByName(need(o.name, 'name'));
-        const { secret } = await keys.rotate(k.id, CLI_ACTOR);
-        process.stdout.write(`Key "${k.name}" rotated. The old secret no longer works.\n\nNew API key (shown ONCE):\n\n  ${secret}\n\n`);
+        const graceMinutes = o['grace-minutes'] !== undefined ? Number(o['grace-minutes']) : 0;
+        const { secret, key } = await keys.rotate(k.id, CLI_ACTOR, { graceMinutes });
+        const old = key.previousSecretValidUntil ? `The old secret keeps working until ${key.previousSecretValidUntil}.` : 'The old secret no longer works.';
+        process.stdout.write(`Key "${k.name}" rotated. ${old}\n\nNew API key (shown ONCE):\n\n  ${secret}\n\n`);
         break;
       }
       case 'keys:enable':
@@ -270,6 +279,17 @@ async function main() {
         break;
       case 'messages:reject':
         out(await messages.reject(need(o.id, 'id'), o.reason, CLI_ACTOR));
+        break;
+      case 'audit:verify': {
+        const chain = app.get(AuditChainService);
+        await chain.backfill();
+        const r = await chain.verify();
+        out(r);
+        if (!r.ok) process.exitCode = 3;
+        break;
+      }
+      case 'messages:encrypt-bodies':
+        out(await messages.encryptLegacyBodies());
         break;
       default:
         process.stderr.write(`Unknown command "${cmd}".\n\n${HELP}`);

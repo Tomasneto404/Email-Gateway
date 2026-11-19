@@ -63,6 +63,30 @@ model ApiKey {
   maxAttachmentBytes      Int           @map("max_attachment_bytes")
   /// null = use LIVE_PROVIDER
   liveProvider            LiveProvider? @map("live_provider")
+  /// Source IPs/CIDRs allowed to use the key; empty = any
+  allowedIps              String[]      @default([]) @map("allowed_ips")
+  /// The key stops authenticating after this instant; null = never
+  expiresAt               DateTime?     @map("expires_at") @db.Timestamptz(3)
+  /// Previous secret, still accepted until prevKeyExpiresAt (rotation grace period)
+  prevKeyHash             String?       @unique @map("prev_key_hash")
+  prevKeyExpiresAt        DateTime?     @map("prev_key_expires_at") @db.Timestamptz(3)
+  /// Content guardrails: link domains allowed in bodies (empty = any), max links (null = unlimited)
+  allowedLinkDomains      String[]      @default([]) @map("allowed_link_domains")
+  maxLinks                Int?          @map("max_links")
+  /// Reject bodies that contain credentials, private keys, card or bank numbers
+  blockSecrets            Boolean       @default(true) @map("block_secrets")
+  /// MIME types allowed as attachments ("image/*" wildcards); empty = any (executables are always refused)
+  allowedAttachmentTypes  String[]      @default([]) @map("allowed_attachment_types")
+  /// Scan attachments with ClamAV (CLAMAV_HOST)
+  scanAttachments         Boolean       @default(false) @map("scan_attachments")
+  /// Only server-side templates may be sent; free-form subject/text/html are refused
+  templatesOnly           Boolean       @default(false) @map("templates_only")
+  /// Template names the key may use; empty = any template
+  allowedTemplates        String[]      @default([]) @map("allowed_templates")
+  /// Ramp the daily volume up after the key first leaves sandbox (WARMUP_SCHEDULE)
+  warmup                  Boolean       @default(true)
+  /// First time the key left sandbox (start of the warm-up)
+  liveSince               DateTime?     @map("live_since") @db.Timestamptz(3)
   lastUsedAt              DateTime?     @map("last_used_at") @db.Timestamptz(3)
   rotatedAt               DateTime?     @map("rotated_at") @db.Timestamptz(3)
   deletedAt               DateTime?     @map("deleted_at") @db.Timestamptz(3)
@@ -91,8 +115,11 @@ model Message {
   bcc               String[]          @default([])
   replyTo           String?           @map("reply_to")
   subject           String            @default("")
+  /// Encrypted at rest ("enc:v1:…") when APP_ENCRYPTION_KEY is set; older rows may be plain text.
   textBody          String?           @map("text_body")
   htmlBody          String?           @map("html_body")
+  /// Template used to render the message, if any
+  templateName      String?           @map("template_name")
   bodyHash          String            @map("body_hash")
   dedupHash         String?           @map("dedup_hash")
   idempotencyKey    String?           @map("idempotency_key")
@@ -130,7 +157,7 @@ model MessageAttachment {
   filename    String
   contentType String @map("content_type")
   sizeBytes   Int    @map("size_bytes")
-  /// Purged by retention.
+  /// Purged by retention. Encrypted at rest (magic "MGE1") when APP_ENCRYPTION_KEY is set.
   content     Bytes?
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -184,8 +211,14 @@ model GatewayState {
   @@map("gateway_state")
 }
 
+/// Append-only, tamper-evident: every row carries HMAC(prevHash + row) (see AuditChainService).
 model AdminAudit {
   id         String   @id @default(uuid(7)) @db.Uuid
+  /// gap-free order of the hash chain
+  seq        BigInt   @unique @default(autoincrement())
+  /// hash of the previous row in the chain (or of the retention anchor)
+  prevHash   String?  @map("prev_hash")
+  hash       String?
   at         DateTime @default(now()) @db.Timestamptz(3)
   /// user | token | cli | system
   actorType  String   @map("actor_type")
@@ -203,6 +236,70 @@ model AdminAudit {
   @@index([action, at(sort: Desc)])
   @@index([actorType, actorId])
   @@map("admin_audit")
+}
+
+/// Singleton (id = 1): where the audit chain starts after retention removed older rows.
+model AuditChainState {
+  id         Int      @id @default(1)
+  anchorSeq  BigInt?  @map("anchor_seq")
+  anchorHash String?  @map("anchor_hash")
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("audit_chain_state")
+}
+
+/// Server-side message template. Variables are written {{name}}.
+model Template {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  name        String   @unique
+  description String   @default("")
+  subject     String
+  text        String?
+  html        String?
+  /// variable names found in subject/text/html
+  variables   String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("templates")
+}
+
+/// Where alerts go: a webhook (HMAC-signed), a Slack incoming webhook or email recipients.
+model AlertChannel {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  name            String    @unique
+  /// webhook | slack | email
+  type            String
+  /// sealed with APP_ENCRYPTION_KEY: URL, or comma-separated email addresses
+  targetEnc       String    @map("target_enc")
+  /// sealed HMAC signing secret (webhook only)
+  secretEnc       String?   @map("secret_enc")
+  /// alert types delivered here; ["*"] = all
+  events          String[]  @default(["*"])
+  enabled         Boolean   @default(true)
+  lastDeliveredAt DateTime? @map("last_delivered_at") @db.Timestamptz(3)
+  lastError       String?   @map("last_error")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("alert_channels")
+}
+
+/// History of raised alerts.
+model AlertEvent {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  at          DateTime @default(now()) @db.Timestamptz(3)
+  type        String
+  /// info | warning | critical
+  severity    String
+  title       String
+  detail      Json?
+  /// channel names that received it
+  deliveredTo String[] @default([]) @map("delivered_to")
+  failedTo    String[] @default([]) @map("failed_to")
+
+  @@index([at(sort: Desc)])
+  @@map("alert_events")
 }
 
 /// Human administrators (local password + mandatory TOTP, or Authentik SSO).
@@ -230,8 +327,28 @@ model AdminUser {
   sessions AdminSession[]
   invites  AdminInvite[]
   roles    AdminUserRole[]
+  passkeys AdminPasskey[]
 
   @@map("admin_users")
+}
+
+/// WebAuthn credential (passkey / security key), accepted as a second factor.
+model AdminPasskey {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  /// base64url credential id
+  credentialId String    @unique @map("credential_id")
+  publicKey    Bytes     @map("public_key")
+  counter      BigInt    @default(0)
+  transports   String[]  @default([])
+  name         String    @default("Passkey")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamptz(3)
+
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("admin_passkeys")
 }
 
 model AdminSession {

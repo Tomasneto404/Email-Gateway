@@ -21,7 +21,11 @@ export const PERMISSIONS = [
   { id: 'users:read', area: 'users', label: 'View admin users and roles' },
   { id: 'users:manage', area: 'users', label: 'Invite, edit, disable and delete users; assign roles' },
   { id: 'roles:manage', area: 'roles', label: 'Create, edit and delete roles' },
-  { id: 'audit:read', area: 'audit', label: 'View the activity log' },
+  { id: 'templates:read', area: 'templates', label: 'View message templates' },
+  { id: 'templates:manage', area: 'templates', label: 'Create, edit and delete message templates' },
+  { id: 'alerts:read', area: 'alerts', label: 'View alert channels and alert history' },
+  { id: 'alerts:manage', area: 'alerts', label: 'Create, edit, test and delete alert channels' },
+  { id: 'audit:read', area: 'audit', label: 'View the activity log and verify its integrity' },
   { id: 'settings:read', area: 'settings', label: 'View the effective configuration' },
 ] as const;
 

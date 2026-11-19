@@ -2,6 +2,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { APP_CONFIG, AppConfig } from '../config/config';
+import { GatewayError } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { AdminSession, AdminUser, Role } from '../generated/prisma/client';
 import { effectivePermissions } from './permissions';
@@ -83,6 +84,30 @@ export class SessionsService {
 
   async destroyAllForUser(userId: string) {
     await this.prisma.adminSession.deleteMany({ where: { userId } });
+  }
+
+  /** The user's signed-in sessions (pre-MFA ones are not listed). */
+  async listForUser(userId: string, currentIdHash?: string) {
+    const rows = await this.prisma.adminSession.findMany({ where: { userId, mfaPassed: true, expiresAt: { gt: new Date() } }, orderBy: { lastSeenAt: 'desc' } });
+    return rows.map((s) => ({
+      id: s.idHash,
+      current: s.idHash === currentIdHash,
+      ip: s.ip,
+      userAgent: s.userAgent,
+      createdAt: s.createdAt.toISOString(),
+      lastSeenAt: s.lastSeenAt.toISOString(),
+      expiresAt: s.expiresAt.toISOString(),
+    }));
+  }
+
+  async revokeForUser(userId: string, idHash: string) {
+    const res = await this.prisma.adminSession.deleteMany({ where: { userId, idHash } });
+    if (!res.count) throw new GatewayError('NOT_FOUND', 'Session not found.');
+  }
+
+  async revokeOthers(userId: string, keepIdHash?: string): Promise<number> {
+    const res = await this.prisma.adminSession.deleteMany({ where: { userId, ...(keepIdHash ? { NOT: { idHash: keepIdHash } } : {}) } });
+    return res.count;
   }
 
   readToken(req: Request): string | undefined {

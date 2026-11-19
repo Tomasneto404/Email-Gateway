@@ -1,6 +1,279 @@
 {
   "components": {
     "schemas": {
+      "AccountSessionDto": {
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "id": {
+            "description": "Opaque session id (hash of the cookie)",
+            "type": "string"
+          },
+          "ip": {
+            "nullable": true,
+            "type": "string"
+          },
+          "lastSeenAt": {
+            "type": "string"
+          },
+          "userAgent": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "current",
+          "ip",
+          "userAgent",
+          "createdAt",
+          "lastSeenAt",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "AlertChannelCreatedDto": {
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/AlertChannelDto"
+          },
+          "signingSecret": {
+            "description": "Webhook signing secret, shown ONCE. Verify X-Mail-Gateway-Signature = sha256=HMAC(secret, \"<timestamp>.<body>\").",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "type": "object"
+      },
+      "AlertChannelDto": {
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastDeliveredAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "lastError": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "signed": {
+            "type": "boolean"
+          },
+          "targetPreview": {
+            "description": "Target with the secret parts hidden (URL host only, email addresses as is)",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "webhook",
+              "slack",
+              "email"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "targetPreview",
+          "signed",
+          "events",
+          "enabled",
+          "lastDeliveredAt",
+          "lastError",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "AlertChannelListDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertChannelDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "AlertEventDto": {
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "deliveredTo": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "nullable": true,
+            "type": "object"
+          },
+          "failedTo": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "type",
+          "severity",
+          "title",
+          "detail",
+          "deliveredTo",
+          "failedTo"
+        ],
+        "type": "object"
+      },
+      "AlertEventListDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertEventDto"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "type": "object"
+      },
+      "AlertRulesDto": {
+        "properties": {
+          "approvalWaitMinutes": {
+            "type": "number"
+          },
+          "cooldownMinutes": {
+            "type": "number"
+          },
+          "failureSpike": {
+            "type": "number"
+          },
+          "keyExpiryDays": {
+            "type": "number"
+          },
+          "quotaPercent": {
+            "type": "number"
+          },
+          "rejectionSpike": {
+            "type": "number"
+          },
+          "spikeWindowMinutes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "rejectionSpike",
+          "failureSpike",
+          "spikeWindowMinutes",
+          "quotaPercent",
+          "approvalWaitMinutes",
+          "keyExpiryDays",
+          "cooldownMinutes"
+        ],
+        "type": "object"
+      },
+      "AlertTestDto": {
+        "properties": {
+          "eventId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventId"
+        ],
+        "type": "object"
+      },
+      "AlertTypeDto": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "severity",
+          "label"
+        ],
+        "type": "object"
+      },
       "AttachmentDto": {
         "properties": {
           "content": {
@@ -76,6 +349,10 @@
             "nullable": true,
             "type": "object"
           },
+          "hash": {
+            "nullable": true,
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -90,6 +367,10 @@
             ],
             "type": "string"
           },
+          "seq": {
+            "description": "Position in the tamper-evident chain",
+            "type": "string"
+          },
           "targetId": {
             "nullable": true,
             "type": "string"
@@ -101,6 +382,8 @@
         },
         "required": [
           "id",
+          "seq",
+          "hash",
           "at",
           "actorType",
           "actorId",
@@ -145,6 +428,46 @@
           "page",
           "pageSize",
           "actions"
+        ],
+        "type": "object"
+      },
+      "AuditVerifyDto": {
+        "properties": {
+          "anchorSeq": {
+            "nullable": true,
+            "type": "string"
+          },
+          "brokenAtSeq": {
+            "nullable": true,
+            "type": "string"
+          },
+          "checked": {
+            "type": "number"
+          },
+          "headHash": {
+            "nullable": true,
+            "type": "string"
+          },
+          "headSeq": {
+            "nullable": true,
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "reason": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "checked",
+          "headSeq",
+          "headHash",
+          "anchorSeq",
+          "brokenAtSeq",
+          "reason"
         ],
         "type": "object"
       },
@@ -270,6 +593,22 @@
         ],
         "type": "object"
       },
+      "ChangePasswordBody": {
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "description": "At least 12 characters",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object"
+      },
       "CheckDto": {
         "properties": {
           "error": {
@@ -304,10 +643,64 @@
         ],
         "type": "object"
       },
+      "CreateAlertChannelDto": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "description": "Alert types delivered to this channel; [\"*\"] = all.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "target": {
+            "description": "webhook / slack: the URL (https recommended). email: comma-separated addresses.",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "webhook",
+              "slack",
+              "email"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
       "CreateKeyDto": {
         "properties": {
           "allowReplyTo": {
             "type": "boolean"
+          },
+          "allowedAttachmentTypes": {
+            "description": "MIME types allowed as attachments (\"application/pdf\", \"image/*\"). Empty = any. Executables are always refused.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedIps": {
+            "description": "Source IPs or CIDR ranges allowed to use the key (\"10.0.0.0/24\", \"2001:db8::/32\"). Empty = any.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedLinkDomains": {
+            "description": "Domains links in the body may point to (subdomains included). Empty = any.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "allowedRecipients": {
             "description": "Exact addresses (\"ops@example.com\") and/or domains (\"@example.com\"). Empty = reject everything.",
@@ -316,7 +709,18 @@
             },
             "type": "array"
           },
+          "allowedTemplates": {
+            "description": "Template names the key may use. Empty = any template.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "attachmentsAllowed": {
+            "type": "boolean"
+          },
+          "blockSecrets": {
+            "description": "Refuse bodies containing credentials, private keys, card or bank numbers (default true).",
             "type": "boolean"
           },
           "description": {
@@ -325,6 +729,11 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "expiresAt": {
+            "description": "ISO date-time after which the key stops working. null = never.",
+            "nullable": true,
+            "type": "string"
           },
           "fromAddress": {
             "description": "Fixed sender address (required on create). Clients cannot override it.",
@@ -344,6 +753,11 @@
             "type": "string"
           },
           "maxAttachmentBytes": {
+            "type": "number"
+          },
+          "maxLinks": {
+            "description": "Maximum distinct links per message. null = unlimited.",
+            "nullable": true,
             "type": "number"
           },
           "maxMessageBytes": {
@@ -370,6 +784,18 @@
           },
           "quotaPerHour": {
             "type": "number"
+          },
+          "scanAttachments": {
+            "description": "Virus-scan attachments with ClamAV (needs CLAMAV_HOST on the gateway).",
+            "type": "boolean"
+          },
+          "templatesOnly": {
+            "description": "Only server-side templates may be sent; free-form subject/text/html are refused.",
+            "type": "boolean"
+          },
+          "warmup": {
+            "description": "Ramp up the daily volume over the first days after the key leaves sandbox (WARMUP_SCHEDULE).",
+            "type": "boolean"
           }
         },
         "required": [
@@ -402,6 +828,178 @@
         "required": [
           "name",
           "permissions"
+        ],
+        "type": "object"
+      },
+      "CreateTemplateDto": {
+        "properties": {
+          "description": {
+            "description": "What the template is for (shown to API clients in GET /v1/templates).",
+            "type": "string"
+          },
+          "html": {
+            "description": "HTML body with {{variables}} (values are HTML-escaped).",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "description": "Unique name used by API clients (\"template\": \"<name>\"). Letters, digits, \".\", \"_\", \"-\".",
+            "type": "string"
+          },
+          "subject": {
+            "description": "Subject with {{variables}}. No line breaks.",
+            "type": "string"
+          },
+          "text": {
+            "description": "Plain-text body with {{variables}}.",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "DkimCheckDto": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "record": {
+            "nullable": true,
+            "type": "string"
+          },
+          "selector": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "record",
+          "note",
+          "selector"
+        ],
+        "type": "object"
+      },
+      "DmarcCheckDto": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "policy": {
+            "nullable": true,
+            "type": "string"
+          },
+          "record": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "record",
+          "note",
+          "policy"
+        ],
+        "type": "object"
+      },
+      "DomainCheckDto": {
+        "properties": {
+          "checkedAt": {
+            "type": "string"
+          },
+          "dkim": {
+            "$ref": "#/components/schemas/DkimCheckDto"
+          },
+          "dmarc": {
+            "$ref": "#/components/schemas/DmarcCheckDto"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "off",
+              "warn",
+              "enforce"
+            ],
+            "type": "string"
+          },
+          "ok": {
+            "description": "SPF and DMARC do not fail",
+            "type": "boolean"
+          },
+          "spf": {
+            "$ref": "#/components/schemas/DomainCheckItemDto"
+          }
+        },
+        "required": [
+          "domain",
+          "mode",
+          "checkedAt",
+          "spf",
+          "dmarc",
+          "dkim",
+          "ok"
+        ],
+        "type": "object"
+      },
+      "DomainCheckItemDto": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "record": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "record",
+          "note"
+        ],
+        "type": "object"
+      },
+      "DomainLimitDto": {
+        "properties": {
+          "domain": {
+            "description": "\"*\" = every other domain",
+            "type": "string"
+          },
+          "perHour": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "domain",
+          "perHour"
         ],
         "type": "object"
       },
@@ -564,13 +1162,41 @@
           "allowReplyTo": {
             "type": "boolean"
           },
+          "allowedAttachmentTypes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedIps": {
+            "description": "Source IPs/CIDRs allowed; empty = any",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedLinkDomains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "allowedRecipients": {
             "items": {
               "type": "string"
             },
             "type": "array"
           },
+          "allowedTemplates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "attachmentsAllowed": {
+            "type": "boolean"
+          },
+          "blockSecrets": {
             "type": "boolean"
           },
           "createdAt": {
@@ -581,6 +1207,10 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string"
           },
           "fromAddress": {
             "type": "string"
@@ -607,7 +1237,16 @@
             "nullable": true,
             "type": "string"
           },
+          "liveSince": {
+            "description": "First time the key left sandbox",
+            "nullable": true,
+            "type": "string"
+          },
           "maxAttachmentBytes": {
+            "type": "number"
+          },
+          "maxLinks": {
+            "nullable": true,
             "type": "number"
           },
           "maxMessageBytes": {
@@ -630,6 +1269,11 @@
           "prefixStale": {
             "type": "boolean"
           },
+          "previousSecretValidUntil": {
+            "description": "Rotation grace: the previous secret works until then",
+            "nullable": true,
+            "type": "string"
+          },
           "quotaPerDay": {
             "type": "number"
           },
@@ -640,8 +1284,26 @@
             "nullable": true,
             "type": "string"
           },
+          "scanAttachments": {
+            "type": "boolean"
+          },
+          "templatesOnly": {
+            "type": "boolean"
+          },
           "updatedAt": {
             "type": "string"
+          },
+          "warmup": {
+            "type": "boolean"
+          },
+          "warmupState": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WarmupStateDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
           }
         },
         "required": [
@@ -662,6 +1324,19 @@
           "attachmentsAllowed",
           "maxAttachmentBytes",
           "liveProvider",
+          "allowedIps",
+          "expiresAt",
+          "previousSecretValidUntil",
+          "allowedLinkDomains",
+          "maxLinks",
+          "blockSecrets",
+          "allowedAttachmentTypes",
+          "scanAttachments",
+          "templatesOnly",
+          "allowedTemplates",
+          "warmup",
+          "liveSince",
+          "warmupState",
           "prefixStale",
           "lastUsedAt",
           "rotatedAt",
@@ -731,13 +1406,41 @@
           "allowReplyTo": {
             "type": "boolean"
           },
+          "allowedAttachmentTypes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedIps": {
+            "description": "Source IPs/CIDRs allowed; empty = any",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedLinkDomains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "allowedRecipients": {
             "items": {
               "type": "string"
             },
             "type": "array"
           },
+          "allowedTemplates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "attachmentsAllowed": {
+            "type": "boolean"
+          },
+          "blockSecrets": {
             "type": "boolean"
           },
           "createdAt": {
@@ -748,6 +1451,10 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "expiresAt": {
+            "nullable": true,
+            "type": "string"
           },
           "fromAddress": {
             "type": "string"
@@ -774,7 +1481,16 @@
             "nullable": true,
             "type": "string"
           },
+          "liveSince": {
+            "description": "First time the key left sandbox",
+            "nullable": true,
+            "type": "string"
+          },
           "maxAttachmentBytes": {
+            "type": "number"
+          },
+          "maxLinks": {
+            "nullable": true,
             "type": "number"
           },
           "maxMessageBytes": {
@@ -797,6 +1513,11 @@
           "prefixStale": {
             "type": "boolean"
           },
+          "previousSecretValidUntil": {
+            "description": "Rotation grace: the previous secret works until then",
+            "nullable": true,
+            "type": "string"
+          },
           "quotaPerDay": {
             "type": "number"
           },
@@ -807,11 +1528,29 @@
             "nullable": true,
             "type": "string"
           },
+          "scanAttachments": {
+            "type": "boolean"
+          },
+          "templatesOnly": {
+            "type": "boolean"
+          },
           "updatedAt": {
             "type": "string"
           },
           "usage": {
             "$ref": "#/components/schemas/KeyUsageDto"
+          },
+          "warmup": {
+            "type": "boolean"
+          },
+          "warmupState": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WarmupStateDto"
+              }
+            ],
+            "nullable": true,
+            "type": "object"
           }
         },
         "required": [
@@ -832,6 +1571,19 @@
           "attachmentsAllowed",
           "maxAttachmentBytes",
           "liveProvider",
+          "allowedIps",
+          "expiresAt",
+          "previousSecretValidUntil",
+          "allowedLinkDomains",
+          "maxLinks",
+          "blockSecrets",
+          "allowedAttachmentTypes",
+          "scanAttachments",
+          "templatesOnly",
+          "allowedTemplates",
+          "warmup",
+          "liveSince",
+          "warmupState",
           "prefixStale",
           "lastUsedAt",
           "rotatedAt",
@@ -862,12 +1614,24 @@
             "description": "Present when next=done",
             "type": "string"
           },
+          "methods": {
+            "description": "Second-factor methods available (when next is not done)",
+            "items": {
+              "enum": [
+                "passkey",
+                "totp"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
           "next": {
-            "description": "done: signed in (no 2FA for this user). totp_verify: enter the TOTP code. totp_enroll: 2FA is mandatory and must be set up now.",
+            "description": "done: signed in (no 2FA for this user). totp_verify: enter the TOTP code. totp_enroll: 2FA is mandatory and must be set up now. second_factor: the user has a passkey; use one of `methods` (passkey via /admin/auth/passkey/*, totp via /admin/auth/totp/verify).",
             "enum": [
               "done",
               "totp_enroll",
-              "totp_verify"
+              "totp_verify",
+              "second_factor"
             ],
             "type": "string"
           },
@@ -901,8 +1665,29 @@
             "description": "Whether replyTo may be set.",
             "type": "boolean"
           },
+          "allowedAttachmentTypes": {
+            "description": "Allowed attachment MIME types (\"image/*\" wildcards). Empty = any. Executables are always refused.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedLinkDomains": {
+            "description": "Domains links in the body may point to (subdomains included). Empty = any.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "allowedRecipients": {
             "description": "Allowed recipients: exact addresses and \"@domain\" entries. Every to/cc/bcc must match one.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedTemplates": {
+            "description": "Templates the key may use. Empty = any.",
             "items": {
               "type": "string"
             },
@@ -911,12 +1696,21 @@
           "attachmentsAllowed": {
             "type": "boolean"
           },
+          "blockSecrets": {
+            "description": "Bodies with credentials, private keys, card or bank numbers are refused (CONTENT_BLOCKED).",
+            "type": "boolean"
+          },
           "description": {
             "type": "string"
           },
           "enabled": {
             "description": "false = key disabled; every send is rejected with KEY_DISABLED.",
             "type": "boolean"
+          },
+          "expiresAt": {
+            "description": "The key stops working at this time (ISO). null = never.",
+            "nullable": true,
+            "type": "string"
           },
           "fromAddress": {
             "description": "Fixed sender address used for every message.",
@@ -941,6 +1735,11 @@
           "maxAttachmentBytes": {
             "type": "number"
           },
+          "maxLinks": {
+            "description": "Max distinct links per message. null = unlimited.",
+            "nullable": true,
+            "type": "number"
+          },
           "maxMessageBytes": {
             "description": "Max subject+text+html+attachments bytes.",
             "type": "number"
@@ -961,14 +1760,43 @@
           "name": {
             "type": "string"
           },
+          "previousSecretValidUntil": {
+            "description": "After a rotation, the previous secret keeps working until then. Switch to the new one before.",
+            "nullable": true,
+            "type": "string"
+          },
           "quotaPerDay": {
             "type": "number"
           },
           "quotaPerHour": {
             "type": "number"
           },
+          "scanAttachments": {
+            "description": "Attachments are virus-scanned.",
+            "type": "boolean"
+          },
+          "templatesOnly": {
+            "description": "Only server-side templates may be sent (see GET /v1/templates).",
+            "type": "boolean"
+          },
           "usage": {
             "$ref": "#/components/schemas/UsageDto"
+          },
+          "warmupState": {
+            "description": "While warming up after going live: today's daily cap ({day, days, dailyCap}). usage.day.limit already includes it.",
+            "nullable": true,
+            "properties": {
+              "dailyCap": {
+                "type": "number"
+              },
+              "day": {
+                "type": "number"
+              },
+              "days": {
+                "type": "number"
+              }
+            },
+            "type": "object"
           }
         },
         "required": [
@@ -986,6 +1814,12 @@
           "quotaPerDay",
           "attachmentsAllowed",
           "maxAttachmentBytes",
+          "allowedLinkDomains",
+          "blockSecrets",
+          "allowedAttachmentTypes",
+          "scanAttachments",
+          "templatesOnly",
+          "allowedTemplates",
           "usage"
         ],
         "type": "object"
@@ -1542,6 +2376,30 @@
         ],
         "type": "object"
       },
+      "PasskeyDto": {
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "lastUsedAt"
+        ],
+        "type": "object"
+      },
       "PasswordBody": {
         "properties": {
           "password": {
@@ -1551,6 +2409,18 @@
         },
         "required": [
           "password"
+        ],
+        "type": "object"
+      },
+      "PasswordChangedDto": {
+        "properties": {
+          "otherSessionsRevoked": {
+            "description": "Other sessions that were signed out",
+            "type": "number"
+          }
+        },
+        "required": [
+          "otherSessionsRevoked"
         ],
         "type": "object"
       },
@@ -1579,6 +2449,33 @@
           "id",
           "area",
           "label"
+        ],
+        "type": "object"
+      },
+      "PublicTemplateDto": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "subject": {
+            "description": "The subject pattern, with {{variables}}",
+            "type": "string"
+          },
+          "variables": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "variables",
+          "subject"
         ],
         "type": "object"
       },
@@ -1649,6 +2546,17 @@
         "required": [
           "enabled",
           "webhookConfigured"
+        ],
+        "type": "object"
+      },
+      "RevokedDto": {
+        "properties": {
+          "revoked": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "revoked"
         ],
         "type": "object"
       },
@@ -1740,6 +2648,15 @@
         ],
         "type": "object"
       },
+      "RotateKeyDto": {
+        "properties": {
+          "graceMinutes": {
+            "description": "Minutes the previous secret keeps working (0-10080). 0 = it stops immediately.",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
       "SendAcceptedDto": {
         "properties": {
           "id": {
@@ -1812,8 +2729,13 @@
             "type": "string"
           },
           "subject": {
-            "description": "Subject line. Required, 1-998 characters, no line breaks.",
+            "description": "Subject line, 1-998 characters, no line breaks. Required unless \"template\" is used.",
             "example": "Nightly report",
+            "type": "string"
+          },
+          "template": {
+            "description": "Name of a server-side template (GET /v1/templates). Renders subject/text/html from \"variables\"; do not send subject, text or html with it. Keys with templatesOnly=true must use a template.",
+            "example": "password-reset",
             "type": "string"
           },
           "text": {
@@ -1836,11 +2758,15 @@
                 "type": "array"
               }
             ]
+          },
+          "variables": {
+            "additionalProperties": true,
+            "description": "Values for the template variables (strings, numbers or booleans). Every variable of the template is required.",
+            "type": "object"
           }
         },
         "required": [
-          "to",
-          "subject"
+          "to"
         ],
         "type": "object"
       },
@@ -1897,8 +2823,17 @@
           "adminTokenEnabled": {
             "type": "boolean"
           },
+          "alertRules": {
+            "$ref": "#/components/schemas/AlertRulesDto"
+          },
+          "auditChainKeyed": {
+            "type": "boolean"
+          },
           "authentik": {
             "$ref": "#/components/schemas/AuthentikSettingsDto"
+          },
+          "bodiesEncrypted": {
+            "type": "boolean"
           },
           "bodyRetentionDays": {
             "type": "number"
@@ -1911,6 +2846,10 @@
           },
           "breakerWindowSeconds": {
             "type": "number"
+          },
+          "clamav": {
+            "nullable": true,
+            "type": "string"
           },
           "dedupWindowSeconds": {
             "type": "number"
@@ -1950,6 +2889,12 @@
           "maxRequestBytes": {
             "type": "number"
           },
+          "recipientDomainLimits": {
+            "items": {
+              "$ref": "#/components/schemas/DomainLimitDto"
+            },
+            "type": "array"
+          },
           "recordRetentionDays": {
             "type": "number"
           },
@@ -1957,6 +2902,14 @@
             "$ref": "#/components/schemas/ResendSettingsDto"
           },
           "retentionCron": {
+            "type": "string"
+          },
+          "senderDomainChecks": {
+            "enum": [
+              "off",
+              "warn",
+              "enforce"
+            ],
             "type": "string"
           },
           "sessionIdleMinutes": {
@@ -1976,6 +2929,13 @@
           },
           "trustProxy": {
             "type": "string"
+          },
+          "warmupSchedule": {
+            "description": "Daily caps for day 1, 2, … after a key leaves sandbox",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -2004,7 +2964,14 @@
           "adminTokenEnabled",
           "sessionTtlHours",
           "sessionIdleMinutes",
-          "authentik"
+          "authentik",
+          "recipientDomainLimits",
+          "warmupSchedule",
+          "senderDomainChecks",
+          "clamav",
+          "bodiesEncrypted",
+          "auditChainKeyed",
+          "alertRules"
         ],
         "type": "object"
       },
@@ -2059,6 +3026,14 @@
             },
             "type": "array"
           },
+          "previousTotals": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TotalsDto"
+              }
+            ],
+            "description": "Same totals for the period of equal length just before \"from\""
+          },
           "rejectionsByReason": {
             "items": {
               "$ref": "#/components/schemas/ReasonCountDto"
@@ -2089,6 +3064,7 @@
           "from",
           "to",
           "totals",
+          "previousTotals",
           "series",
           "rejectionsByReason",
           "topKeys",
@@ -2148,6 +3124,108 @@
           "queue",
           "pendingApprovals",
           "smtpHealth"
+        ],
+        "type": "object"
+      },
+      "TemplateDto": {
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "html": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "text": {
+            "nullable": true,
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "usedBy": {
+            "description": "Keys that explicitly allow this template",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "variables": {
+            "description": "Variables found in subject/text/html",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "subject",
+          "text",
+          "html",
+          "variables",
+          "usedBy",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "TemplateListDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateDto"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "TemplatePreviewBody": {
+        "properties": {
+          "variables": {
+            "additionalProperties": true,
+            "description": "Variable values",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "TemplateRenderDto": {
+        "properties": {
+          "html": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject"
         ],
         "type": "object"
       },
@@ -2235,10 +3313,53 @@
         ],
         "type": "object"
       },
+      "UpdateAlertChannelDto": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "description": "Alert types delivered to this channel; [\"*\"] = all.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "target": {
+            "description": "webhook / slack: the URL (https recommended). email: comma-separated addresses.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "UpdateKeyDto": {
         "properties": {
           "allowReplyTo": {
             "type": "boolean"
+          },
+          "allowedAttachmentTypes": {
+            "description": "MIME types allowed as attachments (\"application/pdf\", \"image/*\"). Empty = any. Executables are always refused.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedIps": {
+            "description": "Source IPs or CIDR ranges allowed to use the key (\"10.0.0.0/24\", \"2001:db8::/32\"). Empty = any.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowedLinkDomains": {
+            "description": "Domains links in the body may point to (subdomains included). Empty = any.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "allowedRecipients": {
             "description": "Exact addresses (\"ops@example.com\") and/or domains (\"@example.com\"). Empty = reject everything.",
@@ -2247,7 +3368,18 @@
             },
             "type": "array"
           },
+          "allowedTemplates": {
+            "description": "Template names the key may use. Empty = any template.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "attachmentsAllowed": {
+            "type": "boolean"
+          },
+          "blockSecrets": {
+            "description": "Refuse bodies containing credentials, private keys, card or bank numbers (default true).",
             "type": "boolean"
           },
           "description": {
@@ -2256,6 +3388,11 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "expiresAt": {
+            "description": "ISO date-time after which the key stops working. null = never.",
+            "nullable": true,
+            "type": "string"
           },
           "fromAddress": {
             "description": "Fixed sender address (required on create). Clients cannot override it.",
@@ -2275,6 +3412,11 @@
             "type": "string"
           },
           "maxAttachmentBytes": {
+            "type": "number"
+          },
+          "maxLinks": {
+            "description": "Maximum distinct links per message. null = unlimited.",
+            "nullable": true,
             "type": "number"
           },
           "maxMessageBytes": {
@@ -2297,6 +3439,18 @@
           },
           "quotaPerHour": {
             "type": "number"
+          },
+          "scanAttachments": {
+            "description": "Virus-scan attachments with ClamAV (needs CLAMAV_HOST on the gateway).",
+            "type": "boolean"
+          },
+          "templatesOnly": {
+            "description": "Only server-side templates may be sent; free-form subject/text/html are refused.",
+            "type": "boolean"
+          },
+          "warmup": {
+            "description": "Ramp up the daily volume over the first days after the key leaves sandbox (WARMUP_SCHEDULE).",
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -2320,6 +3474,33 @@
               "type": "string"
             },
             "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateTemplateDto": {
+        "properties": {
+          "description": {
+            "description": "What the template is for (shown to API clients in GET /v1/templates).",
+            "type": "string"
+          },
+          "html": {
+            "description": "HTML body with {{variables}} (values are HTML-escaped).",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "description": "Renaming also updates the keys that allow this template.",
+            "type": "string"
+          },
+          "subject": {
+            "description": "Subject with {{variables}}. No line breaks.",
+            "type": "string"
+          },
+          "text": {
+            "description": "Plain-text body with {{variables}}.",
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -2470,6 +3651,27 @@
           "total"
         ],
         "type": "object"
+      },
+      "WarmupStateDto": {
+        "properties": {
+          "dailyCap": {
+            "description": "Daily cap that applies today",
+            "type": "number"
+          },
+          "day": {
+            "description": "Day of the warm-up (1-based)",
+            "type": "number"
+          },
+          "days": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "days",
+          "dailyCap"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -2501,6 +3703,263 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/admin/account/passkeys": {
+      "get": {
+        "operationId": "accountPasskeys",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PasskeyDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "operationId": "accountAddPasskey",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "response"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Register the passkey created by the browser. It then works as a second factor.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/account/passkeys/options": {
+      "post": {
+        "operationId": "accountPasskeyOptions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "WebAuthn creation options for navigator.credentials.create().",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/account/passkeys/{id}": {
+      "delete": {
+        "operationId": "accountRemovePasskey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/account/password": {
+      "post": {
+        "operationId": "accountChangePassword",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordChangedDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Change your password (local accounts). Your other sessions are signed out.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/account/sessions": {
+      "get": {
+        "operationId": "accountSessions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccountSessionDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Your active sessions",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/account/sessions/revoke-others": {
+      "post": {
+        "operationId": "accountRevokeOtherSessions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokedDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Sign out everywhere except here",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/account/sessions/{id}": {
+      "delete": {
+        "operationId": "accountRevokeSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Sign out one of your sessions",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/admin/account/totp/confirm": {
       "post": {
         "operationId": "accountTotpConfirm",
@@ -2599,6 +4058,272 @@
         "summary": "Start enabling 2FA: returns a new TOTP secret + QR code (inactive until confirmed).",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/admin/alerts/channels": {
+      "get": {
+        "operationId": "adminListAlertChannels",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertChannelListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "adminCreateAlertChannel",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAlertChannelDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertChannelCreatedDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "Webhook (HMAC-signed), Slack incoming webhook or email. A webhook signing secret is returned ONCE.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/alerts/channels/{id}": {
+      "delete": {
+        "operationId": "adminDeleteAlertChannel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "adminUpdateAlertChannel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAlertChannelDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertChannelDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/alerts/channels/{id}/test": {
+      "post": {
+        "operationId": "adminTestAlertChannel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertTestDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "Send a test alert to this channel only (delivered by the worker).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/alerts/events": {
+      "get": {
+        "operationId": "adminListAlertEvents",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertEventListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "Alert history, newest first",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/alerts/types": {
+      "get": {
+        "operationId": "adminAlertTypes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AlertTypeDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "Alert types a channel can subscribe to",
+        "tags": [
+          "admin"
         ]
       }
     },
@@ -2823,6 +4548,36 @@
         ]
       }
     },
+    "/admin/audit/verify": {
+      "get": {
+        "operationId": "adminVerifyAudit",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditVerifyDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "Integrity check of the activity log hash chain. Record headSeq/headHash elsewhere to also detect removal of the newest rows.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/auth/authentik/callback": {
       "get": {
         "operationId": "authAuthentikCallback",
@@ -2994,6 +4749,70 @@
           }
         },
         "summary": "",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/passkey/options": {
+      "post": {
+        "operationId": "authPasskeyOptions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Step 2 with a passkey: WebAuthn request options for navigator.credentials.get().",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/admin/auth/passkey/verify": {
+      "post": {
+        "operationId": "authPasskeyVerify",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "response": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "response"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Step 2 with a passkey: verify the assertion. Issues the full session cookie.",
         "tags": [
           "auth"
         ]
@@ -3467,6 +5286,57 @@
         ]
       }
     },
+    "/admin/keys/{id}/domain-check": {
+      "get": {
+        "operationId": "adminKeyDomainCheck",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fresh",
+            "required": false,
+            "schema": {
+              "enum": [
+                "0",
+                "1"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainCheckDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "admin": []
+          },
+          {
+            "session": []
+          }
+        ],
+        "summary": "SPF / DMARC / DKIM of the key sender domain (SENDER_DOMAIN_CHECKS; cached 1 h, ?fresh=1 to recheck).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/keys/{id}/enable": {
       "post": {
         "operationId": "adminEnableKey",
@@ -3519,6 +5389,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateKeyDto"
+              }
+            }
+          },
+          "required": false
+        },
         "responses": {
           "200": {
             "content": {
@@ -3539,7 +5419,7 @@
             "session": []
           }
         ],
-        "summary": "Rotate the secret. The old secret stops working immediately; the new one is returned ONCE.",
+        "summary": "Rotate the secret; the new one is returned ONCE. The old secret stops immediately, or after graceMinutes.",
         "tags": [
           "admin"
         ]
@@ -4330,6 +6210,239 @@
         ]
       }
     },
+    "/admin/templates": {
+      "get": {
+        "operationId": "adminListTemplates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateListDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "adminCreateTemplate",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "Create a template. Variables are written {{name}}.",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/templates/{id}": {
+      "delete": {
+        "operationId": "adminDeleteTemplate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "Delete a template no key allows any more.",
+        "tags": [
+          "admin"
+        ]
+      },
+      "get": {
+        "operationId": "adminGetTemplate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "adminUpdateTemplate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/templates/{id}/preview": {
+      "post": {
+        "operationId": "adminPreviewTemplate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplatePreviewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateRenderDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "admin": []
+          }
+        ],
+        "summary": "Render with sample variables (nothing is sent).",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/users": {
       "get": {
         "operationId": "adminListUsers",
@@ -4674,7 +6787,7 @@
                 }
               }
             },
-            "description": "VALIDATION_FAILED, FROM_NOT_ALLOWED, TOO_MANY_RECIPIENTS, REPLY_TO_NOT_ALLOWED, ATTACHMENTS_NOT_ALLOWED"
+            "description": "VALIDATION_FAILED, FROM_NOT_ALLOWED, TOO_MANY_RECIPIENTS, TOO_MANY_LINKS, REPLY_TO_NOT_ALLOWED, ATTACHMENTS_NOT_ALLOWED"
           },
           "401": {
             "content": {
@@ -4684,7 +6797,7 @@
                 }
               }
             },
-            "description": "UNAUTHORIZED, INVALID_API_KEY"
+            "description": "UNAUTHORIZED, INVALID_API_KEY, KEY_EXPIRED"
           },
           "403": {
             "content": {
@@ -4694,7 +6807,17 @@
                 }
               }
             },
-            "description": "RECIPIENT_NOT_ALLOWED, KEY_DISABLED"
+            "description": "RECIPIENT_NOT_ALLOWED, LINK_NOT_ALLOWED, KEY_DISABLED, IP_NOT_ALLOWED, TEMPLATE_REQUIRED, TEMPLATE_NOT_ALLOWED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "TEMPLATE_NOT_FOUND"
           },
           "409": {
             "content": {
@@ -4716,6 +6839,26 @@
             },
             "description": "MESSAGE_TOO_LARGE, ATTACHMENT_TOO_LARGE, REQUEST_TOO_LARGE"
           },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "ATTACHMENT_TYPE_NOT_ALLOWED"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            },
+            "description": "CONTENT_BLOCKED (credentials, keys, card/bank numbers in the body), ATTACHMENT_INFECTED"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -4724,7 +6867,7 @@
                 }
               }
             },
-            "description": "QUOTA_EXCEEDED, GLOBAL_RATE_LIMITED, AUTH_RATE_LIMITED (see Retry-After)"
+            "description": "QUOTA_EXCEEDED (also during warm-up), DOMAIN_RATE_LIMITED, GLOBAL_RATE_LIMITED, AUTH_RATE_LIMITED (see Retry-After)"
           },
           "503": {
             "content": {
@@ -4734,7 +6877,7 @@
                 }
               }
             },
-            "description": "GATEWAY_PAUSED, PROVIDER_UNAVAILABLE, QUEUE_UNAVAILABLE"
+            "description": "GATEWAY_PAUSED, PROVIDER_UNAVAILABLE, QUEUE_UNAVAILABLE, ATTACHMENT_SCAN_UNAVAILABLE"
           }
         },
         "security": [
@@ -4743,6 +6886,37 @@
           }
         ],
         "summary": "Queue an email for delivery",
+        "tags": [
+          "send"
+        ]
+      }
+    },
+    "/v1/templates": {
+      "get": {
+        "description": "Server-side templates available to the calling key. Send one with {\"to\": ..., \"template\": \"<name>\", \"variables\": {...}}: every listed variable is required. Keys with templatesOnly=true can only send templates.",
+        "operationId": "listMyTemplates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PublicTemplateDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "summary": "Templates your key may send",
         "tags": [
           "send"
         ]

@@ -18,7 +18,11 @@ describe('OpenAPI spec', () => {
     expect(send.responses['403'].content['application/json'].schema.$ref).toContain('ErrorResponseDto');
     const to = doc.components.schemas.SendDto.properties.to;
     expect(to.description).toMatch(/allowed by your key's policy/);
-    expect(doc.components.schemas.SendDto.required).toEqual(expect.arrayContaining(['to', 'subject']));
+    expect(doc.components.schemas.SendDto.required).toEqual(['to']);
+    // subject is required unless a server-side template is used; both are documented for the agent
+    expect(doc.components.schemas.SendDto.properties.subject.description).toMatch(/Required unless "template"/);
+    expect(doc.components.schemas.SendDto.properties.template.description).toMatch(/GET \/v1\/templates/);
+    expect(doc.paths['/v1/templates'].get.operationId).toBe('listMyTemplates');
     expect(doc.paths['/v1/me'].get.operationId).toBe('getMyPolicy');
     expect(doc.paths['/v1/messages/{id}'].get.operationId).toBe('getMessageStatus');
     // internal endpoints stay out of the public spec

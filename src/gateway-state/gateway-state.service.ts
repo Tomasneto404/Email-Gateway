@@ -2,6 +2,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import { Actor, AdminAuditService } from '../admin/admin-audit.service';
+import { AlertsService } from '../alerts/alerts.service';
 import { EventLogger } from '../common/event-logger';
 import { PrismaService } from '../common/prisma.service';
 import { REDIS } from '../common/redis';
@@ -26,6 +27,7 @@ export class GatewayStateService {
     private readonly queues: QueueService,
     private readonly audit: AdminAuditService,
     private readonly events: EventLogger,
+    private readonly alerts: AlertsService,
   ) {}
 
   async get(): Promise<GatewayStateView> {
@@ -61,6 +63,11 @@ export class GatewayStateService {
     const view = await this.refreshCache();
     await this.audit.record(actor, { action: 'gateway.pause', targetType: 'gateway', details: { reason } });
     this.events.emit('gateway_paused', { reason, actor: actor.label, outcome: 'info' });
+    this.alerts.raiseSoon(
+      opts.breaker ? 'breaker_tripped' : 'gateway_paused',
+      opts.breaker ? `Gateway paused by the circuit breaker: ${reason}` : `Gateway paused by ${actor.label}`,
+      { reason, by: actor.label },
+    );
     return view;
   }
 
@@ -75,6 +82,7 @@ export class GatewayStateService {
     const view = await this.refreshCache();
     await this.audit.record(actor, { action: 'gateway.resume', targetType: 'gateway' });
     this.events.emit('gateway_resumed', { actor: actor.label, outcome: 'info' });
+    this.alerts.raiseSoon('gateway_resumed', `Gateway resumed by ${actor.label}`, { by: actor.label });
     return view;
   }
 

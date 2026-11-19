@@ -8,6 +8,21 @@ export const DOMAIN_RULE_RE = /^@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])
 export const isEmail = (v: string) => EMAIL_RE.test(v) && !v.includes('..') && v.length <= 254;
 export const isRecipientRule = (v: string) => isEmail(v) || DOMAIN_RULE_RE.test(v);
 
+export const HOST_RE = /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+export const MIME_RE = /^[\w.+-]+\/(?:\*|[\w.+-]+)$/;
+const IPV4 = /^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/;
+const IPV6 = /^[0-9a-f:]+(?:%\w+)?$/i;
+/** "10.0.0.5", "10.0.0.0/24", "2001:db8::/32" (the server validates precisely). */
+export function isIpRule(v: string): boolean {
+  const [addr, bits, extra] = v.split('/');
+  if (extra !== undefined) return false;
+  const v4 = IPV4.test(addr);
+  const v6 = !v4 && addr.includes(':') && IPV6.test(addr);
+  if (!v4 && !v6) return false;
+  if (bits === undefined) return true;
+  return /^\d{1,3}$/.test(bits) && Number(bits) <= (v4 ? 32 : 128);
+}
+
 const noCrlf = (v: string) => !/[\r\n]/.test(v);
 const MB = 1024 * 1024;
 const int = (min: number, max: number) =>
@@ -31,6 +46,17 @@ export const policySchema = z.object({
   attachmentsAllowed: z.boolean(),
   maxAttachmentBytes: int(0, 40 * MB),
   liveProvider: z.enum(['default', 'smtp', 'resend']),
+  allowedIps: z.array(z.string().refine(isIpRule, 'Invalid IP or range')).max(100),
+  /** datetime-local value ("" = never) */
+  expiresAt: z.string(),
+  allowedLinkDomains: z.array(z.string().refine((v) => HOST_RE.test(v), 'Invalid domain')).max(200),
+  maxLinks: int(0, 1000).nullable(),
+  blockSecrets: z.boolean(),
+  allowedAttachmentTypes: z.array(z.string().refine((v) => MIME_RE.test(v), 'Invalid type')).max(50),
+  scanAttachments: z.boolean(),
+  templatesOnly: z.boolean(),
+  allowedTemplates: z.array(z.string()).max(200),
+  warmup: z.boolean(),
 });
 export type PolicyForm = z.infer<typeof policySchema>;
 
