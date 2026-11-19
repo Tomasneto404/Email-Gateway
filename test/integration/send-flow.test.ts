@@ -1,5 +1,6 @@
 // Authored by Tomás Neto (TN 2026)
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { BodyCrypto } from '../../src/common/body-crypto';
 import { EventLogger } from '../../src/common/event-logger';
 import { AuditChainService } from '../../src/admin/audit-chain.service';
 import { AlertsService } from '../../src/alerts/alerts.service';
@@ -77,7 +78,10 @@ describe('policy rejections are explicit, audited and logged', () => {
     expect(res.body.error.details.notAllowed).toEqual(['evil@attacker.io']);
 
     const row = await s.prisma.message.findFirst({ where: { apiKeyId: key.id }, orderBy: { createdAt: 'desc' } });
-    expect(row).toMatchObject({ status: 'rejected', rejectCode: 'RECIPIENT_NOT_ALLOWED', subject: 'x', textBody: 'y' });
+    expect(row).toMatchObject({ status: 'rejected', rejectCode: 'RECIPIENT_NOT_ALLOWED', subject: 'x' });
+    // bodies are sealed at rest (APP_ENCRYPTION_KEY) and still readable by the gateway
+    expect(BodyCrypto.isSealedText(row!.textBody)).toBe(true);
+    expect(s.api.get(BodyCrypto).openText(row!.textBody)).toBe('y');
     const ev = s.logs.events('policy_rejected').find((l) => l.keyName === key.name);
     expect(ev).toMatchObject({ reason: 'RECIPIENT_NOT_ALLOWED', outcome: 'rejected', messageId: row!.id });
   });
